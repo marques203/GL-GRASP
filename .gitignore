@@ -1,0 +1,10 @@
+# Build artifacts
+*.o
+*.exe
+
+# Generated test-run outputs (regenerate with ./test_battery.sh)
+results/
+battery_run.log
+
+# Local Claude Code settings
+.claude/
