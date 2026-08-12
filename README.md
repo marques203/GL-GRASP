@@ -1,5 +1,5 @@
-# GL-GRASP
-Código do GL-GRASP implementado em C++, baseado no código do Napoletano do GRASP
+# GRASP (Projeto de implementação do GL-GRASP)
+Futuro Código do GL-GRASP implementado em C++, baseado no código do Napoletano do GRASP
 
 Resolve o problema **IMLCM** (Incremental Multi-Level Crossing Minimization): dado um
 grafo hierárquico (`HDAG`) já desenhado em níveis, insere um conjunto de nós novos
