@@ -96,3 +96,6 @@ como `ERRO`.
 
 Para rodar em outro conjunto de instâncias, outro algoritmo ou outro `time_limit`,
 basta editar as variáveis/laços no topo do `test_battery.sh`.
+
+Artigo Referência:
+https://www.sciencedirect.com/science/article/abs/pii/S0377221718308701
