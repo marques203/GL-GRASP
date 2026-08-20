@@ -8,7 +8,11 @@ entre cada par de vertices adjacentes (arco), exportando o resultado em um
 arquivo texto para ser consumido depois pelo modulo de otimizacao (C++).
 
 Uso:
-    python build_distances.py <instancia.txt> <saida.txt> [--dim N] [--beta B]
+    python build_distances.py <instancia.txt> [saida.txt] [--dim N] [--beta B]
+
+Se <saida.txt> nao for informado, o resultado vai para
+embeddings/distances/<nome_da_instancia>.dist.txt (a pasta e criada se
+nao existir).
 
 Formato do arquivo de saida:
     n_arcos
@@ -16,12 +20,15 @@ Formato do arquivo de saida:
     ...
 """
 import argparse
+from pathlib import Path
 
 import numpy as np
 from sklearn.decomposition import PCA
 
 from hdag_io import read_instance
 from hope_embeddings import compute_hope_embeddings
+
+DEFAULT_OUTPUT_DIR = Path(__file__).parent / "distances"
 
 
 def project_to_2d(embeddings: dict) -> dict:
@@ -53,10 +60,22 @@ def write_distances(path: str, distances: list) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Gera a matriz de distancias estruturais (GL-GRASP - modulo Python)")
     parser.add_argument("instance", help="arquivo de instancia do C-IGDP")
-    parser.add_argument("output", help="arquivo de saida com as distancias por arco")
+    parser.add_argument(
+        "output",
+        nargs="?",
+        default=None,
+        help=f"arquivo de saida com as distancias por arco (default: {DEFAULT_OUTPUT_DIR}/<instancia>.dist.txt)",
+    )
     parser.add_argument("--dim", type=int, default=None, help="dimensao do embedding HOPE (default: 2n-1)")
     parser.add_argument("--beta", type=float, default=0.01, help="parametro beta do indice de Katz (default: 0.01)")
     args = parser.parse_args()
+
+    if args.output is None:
+        DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        output_path = DEFAULT_OUTPUT_DIR / f"{Path(args.instance).stem}.dist.txt"
+    else:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
     instance = read_instance(args.instance)
     print(f"instancia: {instance.num_levels} niveis, {instance.num_nodes} vertices, {len(instance.arcs)} arcos")
@@ -67,8 +86,8 @@ def main():
     coords_2d = project_to_2d(embeddings)
 
     distances = compute_arc_distances(instance, coords_2d)
-    write_distances(args.output, distances)
-    print(f"{len(distances)} distancias de arco escritas em {args.output}")
+    write_distances(output_path, distances)
+    print(f"{len(distances)} distancias de arco escritas em {output_path}")
 
 
 if __name__ == "__main__":

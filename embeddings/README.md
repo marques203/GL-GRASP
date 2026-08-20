@@ -22,11 +22,15 @@ pip install -r requirements.txt
 ## Uso
 
 ```bash
-python build_distances.py <instancia.txt> <saida.txt> [--dim N] [--beta B]
+python build_distances.py <instancia.txt> [saida.txt] [--dim N] [--beta B]
 ```
 
 - `instancia.txt`: arquivo no mesmo formato lido por `HDAG::read_instance`
   (ver `../instance/`).
+- `saida.txt` (opcional): se omitido, o resultado vai para
+  `embeddings/distances/<nome_da_instancia>.dist.txt` (a pasta é criada
+  automaticamente se não existir). Esses arquivos são regeneráveis e não
+  são versionados (ver `.gitignore`).
 - `--dim`: dimensão do embedding HOPE. Default segue o artigo, `k = 2n - 1`
   (`n` = número total de vértices de IG). Nota: a implementação do CogDL
   trunca internamente para `int(dim/2)` valores singulares e depois

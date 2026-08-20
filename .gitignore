@@ -12,3 +12,6 @@ battery_run.log
 # Python
 __pycache__/
 *.pyc
+
+# Distancias geradas pelo modulo de embeddings (regenere com build_distances.py)
+embeddings/distances/
