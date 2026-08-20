@@ -33,21 +33,23 @@ TECHNIQUES = ["spectral", "hope", "node2vec", "sdne", "line", "grarep", "netsmf"
 
 
 def default_dimension(n: int, technique: str) -> int:
-    """Dimensao default por tecnica, seguindo o artigo (Secao 5.2) quando aplicavel."""
+    """Dimensao default por tecnica (artigo, Secao 5.2): k=2n-1 para HOPE e
+    k=n-1 para SPEC; para as demais, 128 (default de literatura citado no
+    artigo, que tambem eh o default de hidden-size do CogDL para elas)."""
     if technique == "spectral":
-        return n - 1  # SPEC: k = n - 1 (usa so os vetores singulares esquerdos)
+        return n - 1
     if technique == "hope":
-        return 2 * n - 1  # HOPE: k = 2n - 1 (esquerdo + direito)
-    return min(128, max(2, n - 1))  # default do CogDL para os demais, limitado pelo tamanho do grafo
+        return 2 * n - 1
+    return 128
 
 
 def _build_model(technique: str, dimension: int, params: dict):
     """Monta o modelo do CogDL para a tecnica pedida.
 
-    `params` permite sobrescrever qualquer parametro especifico da tecnica
-    (ver --param na CLI de build_distances.py); os defaults abaixo foram
-    reduzidos em relacao ao CogDL (pensado para grafos de milhoes de nos)
-    para rodar em segundos/minutos nas instancias do C-IGDP (centenas de nos).
+    Todo parametro que nao seja a dimensao do embedding usa o default
+    literal de `add_args()` do proprio modelo no CogDL (mesma politica do
+    artigo: "utilizamos as configuracoes default da biblioteca CogDL").
+    `params` (--param na CLI) permite sobrescrever qualquer um deles.
     """
     p = dict(params)
 
@@ -60,37 +62,36 @@ def _build_model(technique: str, dimension: int, params: dict):
     if technique == "node2vec":
         return Node2vec(
             dimension,
-            p.pop("walk_length", 40),
-            p.pop("walk_num", 10),
+            p.pop("walk_length", 80),
+            p.pop("walk_num", 40),
             p.pop("window_size", 5),
-            p.pop("worker", 4),
-            p.pop("iteration", 5),
+            p.pop("worker", 10),
+            p.pop("iteration", 10),
             p.pop("p", 1.0),
             p.pop("q", 1.0),
         )
 
     if technique == "sdne":
-        hidden_size1 = p.pop("hidden_size1", min(256, max(dimension * 2, 8)))
         return SDNE(
-            hidden_size1,
+            p.pop("hidden_size1", 1000),
             dimension,
-            p.pop("dropout", 0.2),
+            p.pop("dropout", 0.5),
             p.pop("alpha", 1e-1),
             p.pop("beta", 5.0),
             p.pop("nu1", 1e-4),
             p.pop("nu2", 1e-3),
-            p.pop("epochs", 20),
-            p.pop("lr", 5e-3),
-            True,  # cpu
+            p.pop("epochs", 500),  # default global do CogDL (cogdl/options.py)
+            p.pop("lr", 0.01),  # default global do CogDL (cogdl/options.py)
+            p.pop("cpu", False),  # default global do CogDL: tenta GPU, cai para CPU se nao houver CUDA
         )
 
     if technique == "line":
         return LINE(
             dimension,
-            p.pop("walk_length", 40),
-            p.pop("walk_num", 10),
+            p.pop("walk_length", 80),
+            p.pop("walk_num", 20),
             p.pop("negative", 5),
-            p.pop("batch_size", 128),
+            p.pop("batch_size", 1000),
             p.pop("alpha", 0.025),
             p.pop("order", 3),
         )
@@ -103,8 +104,8 @@ def _build_model(technique: str, dimension: int, params: dict):
             dimension,
             p.pop("window_size", 10),
             p.pop("negative", 1),
-            p.pop("num_round", 10),
-            p.pop("worker", 4),
+            p.pop("num_round", 100),
+            p.pop("worker", 10),
         )
 
     if technique == "prone":

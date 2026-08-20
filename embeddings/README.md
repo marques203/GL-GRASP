@@ -55,15 +55,28 @@ python build_distances.py <instancia.txt> [saida.txt] [--technique T] [--dim N] 
   todas de uma vez (um arquivo de saída por técnica; se uma falhar, as
   outras continuam — resumo impresso no final). Default: `hope`.
 - `--dim`: dimensão do embedding. Default por técnica (ver
-  `default_dimension()` em `embedding_techniques.py`): `hope` usa `2n-1` e
-  `spectral` usa `n-1` (conforme o artigo, Seção 5.2); as demais usam
-  `min(128, n-1)` (default de literatura do CogDL, limitado pelo tamanho
-  do grafo).
+  `default_dimension()` em `embedding_techniques.py`), seguindo a mesma
+  política do artigo (Seção 5.2): `hope` usa `2n-1`, `spectral` usa `n-1`;
+  as demais usam `128` (default de literatura citado no artigo, que
+  também é o default de `hidden-size` do próprio CogDL para elas — **sem
+  limitar pelo tamanho do grafo**: se a instância for pequena o bastante
+  para uma técnica baseada em SVD não comportar `dim=128`, o script vai
+  falhar naquela técnica em vez de reduzir a dimensão silenciosamente).
 - `--param k=v` (repetível): sobrescreve um parâmetro específico da
   técnica escolhida (ex.: `--param walk_num=20 --param window_size=10`
-  para `node2vec`). Os nomes dos parâmetros aceitos por técnica estão
-  documentados nos comentários de `_build_model()` em
-  `embedding_techniques.py`.
+  para `node2vec`). Sem `--param`, todo parâmetro que não seja a dimensão
+  usa o valor default **literal de `add_args()` do próprio modelo no
+  CogDL** — não há redução/hardcode nosso por cima (mesma política do
+  artigo: *"utilizamos as configurações default da biblioteca CogDL"*).
+  Os nomes aceitos por técnica estão documentados nos comentários de
+  `_build_model()` em `embedding_techniques.py`.
+
+> **Nota de performance:** por usar os defaults reais do CogDL (pensados
+> para grafos de milhões de nós), algumas técnicas ficam bem mais lentas
+> do que ficariam com parâmetros reduzidos — em especial `sdne` (500
+> epochs), `netsmf` (100 rounds × 10 workers) e `node2vec`/`line` (mais
+> random walks). Use `--param` para acelerar pontualmente se precisar
+> (ex.: `--param epochs=20` no `sdne`).
 
 Exemplos:
 
@@ -98,19 +111,20 @@ id local) do arquivo de instância original — sempre `layer_v == layer_u + 1`.
 
 ## Validado em
 
-`--technique all`, 8/8 concluídas nas duas instâncias, sem falhas:
+`--technique all`, 8/8 concluídas nas duas instâncias, sem falhas, usando
+os defaults literais do CogDL (ver nota de performance acima):
 
 | Técnica | `incgraph_6_..._1.20_1` (138 vértices, 160 arcos) | `incgraph_20_..._1.60_1` (676 vértices, 4120 arcos) |
 |---|---|---|
-| `spectral` | 0.1s | 1.3s |
-| `hope` | 0.1s | 1.4s |
-| `node2vec` | 0.7s | 3.0s |
-| `sdne` | 0.2s | 0.4s |
-| `line` | 1.9s | 10.6s |
-| `grarep` | 0.2s | 1.3s |
-| `netsmf` | 17.9s | 21.7s |
-| `prone` | 0.0s | 0.2s |
+| `spectral` | 0.2s | 2.0s |
+| `hope` | 0.1s | 2.5s |
+| `node2vec` | 6.2s | 24.6s |
+| `sdne` | 9.5s | 20.3s |
+| `line` | 14.1s | 33.8s |
+| `grarep` | 0.2s | 1.1s |
+| `netsmf` | 52.2s | 52.8s |
+| `prone` | 0.1s | 0.1s |
 
-`netsmf` é a mais lenta mesmo em grafos pequenos porque usa
-`multiprocessing.Pool` — no Windows, o overhead de criar processos domina
-o tempo total nas instâncias menores.
+`netsmf` é a mais lenta (usa `multiprocessing.Pool` com 10 workers e 100
+rounds — no Windows, o overhead de criar processos já domina o tempo
+mesmo na instância pequena, por isso quase não cresce para a grande).
