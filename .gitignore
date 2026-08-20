@@ -8,3 +8,7 @@ battery_run.log
 
 # Local Claude Code settings
 .claude/
+
+# Python
+__pycache__/
+*.pyc
