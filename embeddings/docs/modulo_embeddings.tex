@@ -1,0 +1,543 @@
+% =====================================================================
+%  Documentacao do modulo de embeddings do GL-GRASP (Python)
+%
+%  Para colar dentro do TG, copie a partir de \section{...} e garanta
+%  que o preambulo do seu documento tenha os pacotes listados abaixo.
+% =====================================================================
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds}
+
+% ---------------------------------------------------------------------
+% Estilos usados nos fluxogramas
+% ---------------------------------------------------------------------
+\tikzset{
+  bloco/.style     = {rectangle, draw=black, thick, text width=5.4cm,
+                      minimum height=0.9cm, align=center, font=\small},
+  blocopeq/.style  = {rectangle, draw=black, thick, text width=3.0cm,
+                      minimum height=0.8cm, align=center, font=\small},
+  inicio/.style    = {rectangle, rounded corners=8pt, draw=black, thick,
+                      fill=gray!15, text width=2.6cm, minimum height=0.8cm,
+                      align=center, font=\small\bfseries},
+  es/.style        = {trapezium, trapezium left angle=70,
+                      trapezium right angle=110, draw=black, thick,
+                      fill=gray!8, text width=5.0cm, minimum height=0.8cm,
+                      align=center, font=\small},
+  decisao/.style   = {diamond, aspect=2.4, draw=black, thick,
+                      text width=2.6cm, align=center, font=\small,
+                      inner sep=1pt},
+  subrotina/.style = {rectangle, draw=black, very thick, fill=gray!20,
+                      text width=5.4cm, minimum height=0.9cm,
+                      align=center, font=\small},
+  nota/.style      = {rectangle, draw=gray, dashed, text width=3.1cm,
+                      align=left, font=\scriptsize, fill=yellow!8},
+  seta/.style      = {-{Stealth[length=2.5mm]}, thick},
+  rot/.style       = {font=\scriptsize}
+}
+
+% ---------------------------------------------------------------------
+% Estilo das listagens de codigo
+% ---------------------------------------------------------------------
+\lstdefinestyle{arquivo}{
+  basicstyle=\ttfamily\footnotesize,
+  frame=single,
+  rulecolor=\color{gray!60},
+  backgroundcolor=\color{gray!5},
+  columns=fullflexible,
+  breaklines=true,
+  showstringspaces=false
+}
+\lstset{style=arquivo}
+
+\begin{document}
+
+\section{Módulo de \textit{embeddings} (Python)}
+\label{sec:modulo-embeddings}
+
+\subsection{Visão geral}
+
+O módulo em Python implementa a primeira metade da arquitetura proposta:
+a partir de uma instância do C-IGDP, gera representações vetoriais
+(\textit{embeddings}) para todos os vértices do grafo incremental $IG$,
+reduz essas representações a duas dimensões e deriva, para cada arco do
+grafo, uma \textbf{distância estrutural}. Essas distâncias são exportadas
+em arquivo-texto e constituem a única interface com o módulo de
+otimização escrito em C++.
+
+O módulo não implementa nenhum algoritmo de \textit{Graph Representation
+Learning} (GRL) diretamente: todas as oito técnicas são obtidas da
+implementação de referência da biblioteca CogDL.
+% Inserir aqui o \cite{} do CogDL usado na bibliografia do seu TG.
+O trabalho
+do módulo consiste em (i) traduzir o formato de instância do C-IGDP para
+a estrutura de grafo esperada pelo CogDL, (ii) uniformizar as oito
+interfaces distintas dos modelos sob uma única função e (iii) converter
+os \textit{embeddings} resultantes em distâncias por arco.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=1.1cm]
+  \node (i1) [es, text width=3.2cm] {Instância\\\texttt{.txt}};
+  \node (i2) [bloco, right=1.0cm of i1, text width=3.4cm]
+       {Grafo\\$n$ vértices, $|A|$ arcos};
+  \node (i3) [bloco, right=1.0cm of i2, text width=3.4cm]
+       {\textit{Embeddings}\\matriz $n \times k$};
+  \node (i4) [bloco, right=1.0cm of i3, text width=3.4cm]
+       {Coordenadas 2D\\matriz $n \times 2$};
+  \node (i5) [es, right=1.0cm of i4, text width=3.4cm]
+       {Distâncias\\$|A|$ valores};
+
+  \draw [seta] (i1) -- node[above, rot] {\texttt{read\_instance}} (i2);
+  \draw [seta] (i2) -- node[above, rot] {técnica de GRL} (i3);
+  \draw [seta] (i3) -- node[above, rot] {PCA} (i4);
+  \draw [seta] (i4) -- node[above, rot] {$\|p-q\|_2$} (i5);
+\end{tikzpicture}}
+\caption{Transformações sucessivas dos dados ao longo do módulo. O valor
+de $k$ (dimensão do \textit{embedding}) depende da técnica empregada.}
+\label{fig:pipeline-dados}
+\end{figure}
+
+\subsection{Organização dos arquivos}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Arquivo} & \textbf{Responsabilidade} \\
+\midrule
+\texttt{hdag\_io.py} &
+  Leitura do formato de instância do C-IGDP e representação em memória. \\
+\texttt{embedding\_techniques.py} &
+  Registro das oito técnicas de GRL, adaptação da instância para o grafo
+  do CogDL e geração dos \textit{embeddings}. \\
+\texttt{build\_distances.py} &
+  Script principal (interface de linha de comando): orquestra
+  \textit{embedding} $\rightarrow$ PCA $\rightarrow$ distâncias
+  $\rightarrow$ exportação. \\
+\bottomrule
+\end{tabularx}
+\caption{Arquivos que compõem o módulo de \textit{embeddings}.}
+\label{tab:arquivos}
+\end{table}
+
+\subsection{Formato de entrada}
+
+A entrada é o mesmo arquivo lido pelo método \texttt{HDAG::read\_instance}
+do código em C++, o que evita manter dois formatos distintos. A primeira
+linha contém o número de níveis $\Lambda$; a segunda, $\Lambda$ inteiros
+com a quantidade de vértices de cada nível; em seguida vêm $\Lambda$
+blocos de linhas, um por nível, no formato
+
+\begin{center}
+\texttt{<flag> <id> [<v$_1$> <v$_2$> \ldots]}
+\end{center}
+
+\noindent onde \texttt{flag} vale $1$ para vértice original e $0$ para
+vértice incremental, \texttt{id} é o identificador do vértice e
+\texttt{v}$_i$ são os identificadores dos vértices do nível
+\emph{seguinte} para os quais existe arco (ausentes no último nível).
+
+\begin{lstlisting}[caption={Trecho de \texttt{incgraph\_6\_0.06\_5\_30\_1.20\_1.txt}.},captionpos=b]
+6
+20 27 12 18 26 35
+1 4 2
+1 5 0 8 21 23
+1 3 9 13
+\end{lstlisting}
+
+\paragraph{Observação sobre os identificadores.} Os identificadores são
+\textbf{locais ao nível}: variam de $0$ a (tamanho do nível $-1$) e se
+repetem entre níveis diferentes. Portanto, um vértice só é univocamente
+determinado pelo par $(\lambda, id)$. Esse par é adotado como chave em
+todo o módulo, inclusive no arquivo de saída, de modo que o módulo em
+C++ possa indexar diretamente suas estruturas \texttt{LEVELS[l]} e
+\texttt{IDs[l][i]} sem nenhuma tradução intermediária.
+
+\subsection{Formato de saída}
+
+O arquivo gerado tem, na primeira linha, o número de arcos e, nas linhas
+seguintes, um registro por arco:
+
+\begin{center}
+\texttt{<nível\_u> <id\_u> <nível\_v> <id\_v> <distância>}
+\end{center}
+
+\noindent com \texttt{nível\_v} $=$ \texttt{nível\_u} $+\,1$ sempre, e a
+distância expressa com seis casas decimais.
+
+\begin{lstlisting}[caption={Trecho de um arquivo \texttt{.dist.txt} gerado.},captionpos=b]
+160
+0 4 1 2 0.057043
+0 5 1 0 0.029531
+0 5 1 8 0.041800
+\end{lstlisting}
+
+Quanto \emph{menor} a distância, mais próximos os dois vértices estão no
+espaço latente aprendido, ou seja, mais semelhantes eles são do ponto de
+vista estrutural segundo a técnica empregada. A estrutura do arquivo é
+idêntica para as oito técnicas; apenas os valores da última coluna
+mudam.
+
+\subsection{Descrição das funções}
+
+\subsubsection{\texttt{hdag\_io.py}}
+
+\paragraph{\texttt{NodeKey} (\textit{dataclass}).}
+Estrutura imutável com os campos \texttt{level} e \texttt{node\_id},
+concebida como chave tipada para vértices. \textbf{Não é utilizada} no
+restante do módulo --- as chaves efetivamente empregadas são tuplas
+$(\lambda, id)$ --- permanecendo como código residual.
+
+\paragraph{\texttt{Instance} (\textit{dataclass}).}
+Representação da instância em memória, com os campos:
+\begin{itemize}
+  \item \texttt{num\_levels}: número de níveis $\Lambda$;
+  \item \texttt{level\_sizes}: lista com o número de vértices por nível;
+  \item \texttt{node\_flag}: dicionário $(\lambda, id) \mapsto \{0,1\}$,
+        indicando se o vértice é incremental ou original;
+  \item \texttt{arcs}: lista de pares
+        $\big((\lambda_u, id_u), (\lambda_v, id_v)\big)$, com
+        $\lambda_v = \lambda_u + 1$.
+\end{itemize}
+Expõe ainda o método \texttt{all\_nodes()}, gerador que percorre todos os
+vértices na ordem canônica (nível crescente e, dentro de cada nível,
+identificador crescente) --- essa ordem é o que garante a correspondência
+entre os índices usados pelo CogDL e os pares $(\lambda, id)$ --- e a
+propriedade \texttt{num\_nodes}, que devolve a soma de
+\texttt{level\_sizes}.
+
+\paragraph{\texttt{read\_instance(path) $\rightarrow$ Instance}.}
+Analisa o arquivo de instância conforme o formato descrito acima:
+lê $\Lambda$, os tamanhos dos níveis e, para cada linha de vértice,
+registra a \textit{flag} em \texttt{node\_flag} e acrescenta a
+\texttt{arcs} um par para cada arco declarado (exceto no último nível,
+que não possui sucessor). O custo é linear no número de linhas somado ao
+número de arcos.
+
+\subsubsection{\texttt{embedding\_techniques.py}}
+
+\paragraph{Correção de compatibilidade (código de módulo).}
+Antes de qualquer importação do CogDL, o módulo restaura o \textit{alias}
+\texttt{np.int} caso ele não exista. A versão 0.6 do CogDL utiliza esse
+\textit{alias} na função interna \texttt{alias\_setup}, empregada pelas
+técnicas \texttt{node2vec}, \texttt{line} e \texttt{netsmf}; como o NumPy
+removeu \texttt{np.int} a partir da versão 1.24, sem essa correção as
+três técnicas falham com \texttt{AttributeError}.
+
+\paragraph{\texttt{TECHNIQUES} (constante).}
+Lista com os oito nomes aceitos: \texttt{spectral}, \texttt{hope},
+\texttt{node2vec}, \texttt{sdne}, \texttt{line}, \texttt{grarep},
+\texttt{netsmf} e \texttt{prone}. Serve tanto para validar o argumento de
+linha de comando quanto para definir a ordem de execução no modo
+\texttt{all}.
+
+\paragraph{\texttt{default\_dimension(n, technique) $\rightarrow$ int}.}
+Determina a dimensão $k$ do \textit{embedding} quando ela não é informada
+explicitamente, reproduzindo a política adotada no artigo de referência:
+$k = n-1$ para \texttt{spectral} (que utiliza apenas os vetores
+singulares à esquerda), $k = 2n-1$ para \texttt{hope} (que concatena os
+vetores singulares à esquerda e à direita) e $k = 128$ para as demais.
+
+\paragraph{\texttt{\_build\_model(technique, dimension, params)}.}
+Função-fábrica que traduz o nome da técnica na classe correspondente do
+CogDL, já instanciada. Concentra a única complexidade real de
+uniformização do módulo, uma vez que cada modelo possui uma assinatura de
+construtor distinta. Todos os hiperparâmetros que não sejam a dimensão
+utilizam o valor \textit{default} declarado no próprio CogDL
+(Tabela~\ref{tab:defaults}); o dicionário \texttt{params} permite
+sobrescrever qualquer um deles individualmente. Nomes desconhecidos
+provocam \texttt{ValueError}.
+
+\paragraph{\texttt{\_build\_cogdl\_graph(instance)}.}
+Constrói o objeto \texttt{Graph} exigido pelo CogDL. Como a biblioteca
+exige índices inteiros contíguos, a função estabelece a bijeção
+$(\lambda, id) \leftrightarrow \{0, 1, \ldots, n-1\}$ a partir da ordem
+canônica de \texttt{all\_nodes()}, converte a lista de arcos em um tensor
+\texttt{edge\_index} de dimensão $2 \times |A|$ e devolve o grafo
+acompanhado da lista de vértices na ordem usada --- lista essa que
+permite reverter o mapeamento ao final.
+
+\paragraph{\texttt{compute\_embeddings(\ldots)}.}
+Recebe a instância, o nome da técnica, a dimensão (opcional) e os
+parâmetros de sobrescrita. É a interface pública e única do arquivo,
+independente da técnica escolhida.
+Encadeia \texttt{\_build\_cogdl\_graph()}, a escolha da dimensão
+(\texttt{default\_dimension()} quando \texttt{dimension} é \texttt{None}),
+\texttt{\_build\_model()} e a chamada a \texttt{model.forward()},
+devolvendo um dicionário $(\lambda, id) \mapsto \mathbb{R}^k$ --- isto é,
+já traduzido de volta para a chave original da instância.
+
+\subsubsection{\texttt{build\_distances.py}}
+
+\paragraph{\texttt{DEFAULT\_OUTPUT\_DIR} (constante).}
+Diretório \texttt{distances/}, relativo à pasta do próprio script, usado
+quando o caminho de saída não é informado.
+
+\paragraph{\texttt{project\_to\_2d(embeddings) $\rightarrow$ dict}.}
+Empilha os vetores em uma matriz $n \times k$ e aplica análise de
+componentes principais (\texttt{PCA} do \textit{scikit-learn}) com dois
+componentes, devolvendo o dicionário
+$(\lambda, id) \mapsto \mathbb{R}^2$. A PCA é ajustada sobre a própria
+instância, de modo que as coordenadas não são comparáveis entre
+instâncias distintas.
+
+\paragraph{\texttt{compute\_arc\_distances(\ldots)}.}
+Percorre \texttt{instance.arcs} e, para cada arco $(u,v)$, calcula a
+distância euclidiana $d = \|p_u - p_v\|_2$ entre as projeções
+bidimensionais. Devolve uma lista de quíntuplas
+$(\lambda_u, id_u, \lambda_v, id_v, d)$. Como a iteração segue a ordem de
+\texttt{arcs}, a ordem das linhas do arquivo de saída reproduz a ordem de
+leitura dos arcos na instância.
+
+\paragraph{\texttt{write\_distances(path, distances)}.}
+Grava o arquivo de saída: a contagem de arcos na primeira linha e, em
+seguida, um registro por arco, com a distância formatada em seis casas
+decimais.
+
+\paragraph{\texttt{default\_output\_path(\ldots)}.}
+Cria o diretório de saída, se necessário, e devolve o caminho
+\texttt{distances/<instância>.<técnica>.dist.txt}. A inclusão do nome da
+técnica no arquivo é o que viabiliza o modo \texttt{all} sem
+sobrescrita de resultados.
+
+\paragraph{\texttt{run\_one(\ldots)}.}
+Executa o pipeline completo para \emph{uma} técnica. Cronometra e encadeia
+%
+\begin{center}\small
+\texttt{compute\_embeddings()} $\rightarrow$ \texttt{project\_to\_2d()}
+$\rightarrow$ \texttt{compute\_arc\_distances()} $\rightarrow$
+\texttt{write\_distances()},
+\end{center}
+%
+emitindo ao final uma linha de registro contendo a técnica, a dimensão
+efetiva do \textit{embedding}, o número de arcos e o tempo decorrido. O parâmetro \texttt{instance\_path} consta da assinatura
+mas não é utilizado no corpo da função.
+
+\paragraph{\texttt{parse\_params(pairs) $\rightarrow$ dict}.}
+Converte a lista de argumentos \texttt{-{}-param k=v} em dicionário,
+inferindo o tipo do valor: interpreta como número real quando há ponto
+decimal, como inteiro caso contrário e, se a conversão falhar, preserva
+o valor como texto.
+
+\paragraph{\texttt{main()}.}
+Ponto de entrada. Define a interface de linha de comando (instância,
+saída opcional, \texttt{-{}-technique}, \texttt{-{}-dim} e
+\texttt{-{}-param}), lê a instância uma única vez, monta a lista de
+técnicas a executar e itera sobre ela. Cada técnica é executada dentro de
+um bloco \texttt{try/except}, de modo que uma falha é registrada e
+comunicada sem interromper as demais; ao final, quando há mais de uma
+técnica, imprime um resumo com a contagem de execuções bem-sucedidas e a
+relação das que falharam.
+
+\subsection{Fluxograma de execução}
+
+A Figura~\ref{fig:fluxo-principal} apresenta o fluxo de controle do
+script principal, e a Figura~\ref{fig:runone} detalha o processamento
+realizado para cada técnica.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.76\textwidth}{!}{%
+\begin{tikzpicture}[node distance=1.0cm]
+  \node (start)  [inicio] {Início};
+  \node (args)   [bloco, below=of start]
+        {\texttt{main()}\\leitura dos argumentos (\texttt{argparse})};
+  \node (params) [bloco, below=of args]
+        {\texttt{parse\_params()}\\\texttt{-{}-param k=v} $\rightarrow$ dicionário};
+  \node (read)   [es, below=of params]
+        {\texttt{read\_instance()}\\arquivo $\rightarrow$ \texttt{Instance}};
+  \node (dec1)   [decisao, below=1.1cm of read] {\texttt{-{}-technique all}?};
+  \node (all8)   [blocopeq, right=1.4cm of dec1] {lista $\leftarrow$ 8 técnicas};
+  \node (one)    [blocopeq, left=1.4cm of dec1]  {lista $\leftarrow$ 1 técnica};
+  \node (merge)  [coordinate, below=0.9cm of dec1] {};
+  \node (loop)   [bloco, below=1.6cm of dec1] {Próxima técnica da lista};
+  \node (outp)   [bloco, below=of loop]
+        {\texttt{default\_output\_path()}\\(se a saída não foi informada)};
+  \node (run)    [subrotina, below=of outp]
+        {\texttt{run\_one()}\\(ver Figura~\ref{fig:runone})};
+  \node (nota)   [nota, left=1.2cm of run]
+        {\texttt{try/except}: a falha de uma técnica é registrada e
+         \emph{não} interrompe as demais};
+  \node (dec2)   [decisao, below=1.1cm of run] {restam técnicas?};
+  \node (resumo) [es, below=1.1cm of dec2]
+        {resumo: $X/Y$ técnicas concluídas};
+  \node (fim)    [inicio, below=of resumo] {Fim};
+
+  \draw [seta] (start)  -- (args);
+  \draw [seta] (args)   -- (params);
+  \draw [seta] (params) -- (read);
+  \draw [seta] (read)   -- (dec1);
+  \draw [seta] (dec1)   -- node[above, rot] {sim} (all8);
+  \draw [seta] (dec1)   -- node[above, rot] {não} (one);
+  \draw       (all8)   |- (merge);
+  \draw       (one)    |- (merge);
+  \draw [seta] (merge)  -- (loop);
+  \draw [seta] (loop)   -- (outp);
+  \draw [seta] (outp)   -- (run);
+  \draw [gray, dashed] (nota) -- (run);
+  \draw [seta] (run)    -- (dec2);
+  \draw [seta] (dec2)   -- node[right, rot] {não} (resumo);
+  \draw [seta] (resumo) -- (fim);
+  \draw [seta] (dec2.east) -- node[above, rot] {sim} ++(2.6,0) |- (loop.east);
+\end{tikzpicture}}
+\caption{Fluxo de controle de \texttt{build\_distances.py}. A instância é
+lida uma única vez e reaproveitada por todas as técnicas.}
+\label{fig:fluxo-principal}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.85cm]
+  % ---- coluna da esquerda: compute_embeddings() ----
+  \node (ent) [inicio, text width=5.0cm]
+       {\texttt{Instance}, técnica, dimensão, \textit{params}};
+  \node (g)   [bloco, below=1.45cm of ent]
+       {\texttt{\_build\_cogdl\_graph()}\\$(\lambda, id) \rightarrow 0 \ldots n-1$;
+        \texttt{edge\_index} $2 \times |A|$};
+  \node (d)   [bloco, below=of g]
+       {\texttt{default\_dimension()}\\(se \texttt{-{}-dim} não informado)};
+  \node (m)   [bloco, below=of d]
+       {\texttt{\_build\_model()}\\instancia a classe do CogDL};
+  \node (f)   [bloco, below=of m]
+       {\texttt{model.forward()}\\matriz de \textit{embeddings} $n \times k$};
+  \node (r)   [bloco, below=of f]
+       {retorno: $(\lambda, id) \mapsto \mathbb{R}^k$};
+
+  % ---- coluna da direita: pos-processamento ----
+  \node (pca) [bloco, right=3.4cm of ent]
+       {\texttt{project\_to\_2d()}\\PCA: $k \rightarrow 2$ dimensões};
+  \node (dist)[bloco, below=of pca]
+       {\texttt{compute\_arc\_distances()}\\$d = \|p_u - p_v\|_2$ para cada arco};
+  \node (w)   [es, below=of dist]
+       {\texttt{write\_distances()}\\\texttt{<instância>.}\\\texttt{<técnica>.dist.txt}};
+  \node (log) [inicio, below=of w, text width=5.0cm]
+       {registro: técnica, $k$, $|A|$, tempo};
+
+  \begin{scope}[on background layer]
+    \node (box) [draw=gray, dashed, thick, rounded corners,
+                 fit=(g)(d)(m)(f)(r), inner sep=6pt, fill=gray!5] {};
+  \end{scope}
+  \node [font=\scriptsize\itshape, anchor=south west]
+        at ([shift={(0.15,0.06)}]box.north west) {compute\_embeddings()};
+
+  \draw [seta] (ent) -- (g);
+  \draw [seta] (g)   -- (d);
+  \draw [seta] (d)   -- (m);
+  \draw [seta] (m)   -- (f);
+  \draw [seta] (f)   -- (r);
+  \draw [seta] (r.east) -- ++(1.1,0) |- (pca.west);
+  \draw [seta] (pca) -- (dist);
+  \draw [seta] (dist)-- (w);
+  \draw [seta] (w)   -- (log);
+\end{tikzpicture}}
+\caption{Detalhamento de \texttt{run\_one()}: processamento aplicado a uma
+técnica. O bloco tracejado corresponde à função
+\texttt{compute\_embeddings()}, definida em
+\texttt{embedding\_techniques.py}.}
+\label{fig:runone}
+\end{figure}
+
+\subsection{Parâmetros das técnicas}
+
+Com exceção da dimensão do \textit{embedding}, todos os hiperparâmetros
+utilizam o valor \textit{default} declarado pela própria biblioteca,
+conforme a Tabela~\ref{tab:defaults}. Qualquer um deles pode ser
+sobrescrito individualmente pela opção \texttt{-{}-param}.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Técnica} & \textbf{Dimensão $k$} & \textbf{Demais parâmetros (\textit{default} do CogDL)} \\
+\midrule
+\texttt{spectral} & $n-1$  & --- \\
+\texttt{hope}     & $2n-1$ & \texttt{beta}$=0{,}01$ \\
+\texttt{node2vec} & $128$  & \texttt{walk\_length}$=80$, \texttt{walk\_num}$=40$,
+                             \texttt{window\_size}$=5$, \texttt{worker}$=10$,
+                             \texttt{iteration}$=10$, \texttt{p}$=1{,}0$, \texttt{q}$=1{,}0$ \\
+\texttt{sdne}     & $128$  & \texttt{hidden\_size1}$=1000$, \texttt{dropout}$=0{,}5$,
+                             \texttt{alpha}$=0{,}1$, \texttt{beta}$=5$,
+                             \texttt{nu1}$=10^{-4}$, \texttt{nu2}$=10^{-3}$,
+                             \texttt{epochs}$=500^{\dagger}$, \texttt{lr}$=0{,}01^{\dagger}$,
+                             \texttt{cpu}$=$\texttt{False}$^{\dagger}$ \\
+\texttt{line}     & $128$  & \texttt{walk\_length}$=80$, \texttt{walk\_num}$=20$,
+                             \texttt{negative}$=5$, \texttt{batch\_size}$=1000$,
+                             \texttt{alpha}$=0{,}025$, \texttt{order}$=3$ \\
+\texttt{grarep}   & $128$  & \texttt{step}$=5$ \\
+\texttt{netsmf}   & $128$  & \texttt{window\_size}$=10$, \texttt{negative}$=1$,
+                             \texttt{num\_round}$=100$, \texttt{worker}$=10$ \\
+\texttt{prone}    & $128$  & \texttt{step}$=5$, \texttt{mu}$=0{,}2$, \texttt{theta}$=0{,}5$ \\
+\bottomrule
+\end{tabularx}
+\caption{Configuração adotada por técnica, sendo $n$ o número total de
+vértices do grafo incremental. $^{\dagger}$Parâmetros que não são
+declarados pelo próprio modelo, mas pelo analisador global de argumentos
+do CogDL (\texttt{cogdl/options.py}), compartilhado por todos os modelos
+treináveis da biblioteca.}
+\label{tab:defaults}
+\end{table}
+
+\subsection{Interface de linha de comando}
+
+\begin{lstlisting}[caption={Formas de invocação do módulo.},captionpos=b]
+python build_distances.py <instancia.txt> [saida.txt]
+                          [--technique T] [--dim N] [--param k=v ...]
+
+INST=../instance/incgraph_6_0.06_5_30_1.20_1.txt
+
+# uma tecnica especifica
+python build_distances.py $INST -t spectral
+
+# as oito tecnicas, um arquivo de saida por tecnica
+python build_distances.py $INST -t all
+
+# sobrescrevendo um hiperparametro
+python build_distances.py $INST -t sdne --param epochs=50
+\end{lstlisting}
+
+\subsection{Desempenho observado}
+
+A Tabela~\ref{tab:tempos} apresenta os tempos de execução medidos com a
+configuração da Tabela~\ref{tab:defaults}, para a menor e a maior
+instância do conjunto de testes.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Técnica} & \textbf{138 vértices, 160 arcos} & \textbf{676 vértices, 4120 arcos} \\
+\midrule
+\texttt{spectral} & 0,2 s  & 2,0 s  \\
+\texttt{hope}     & 0,1 s  & 2,5 s  \\
+\texttt{node2vec} & 6,2 s  & 24,6 s \\
+\texttt{sdne}     & 9,5 s  & 20,3 s \\
+\texttt{line}     & 14,1 s & 33,8 s \\
+\texttt{grarep}   & 0,2 s  & 1,1 s  \\
+\texttt{netsmf}   & 52,2 s & 52,8 s \\
+\texttt{prone}    & 0,1 s  & 0,1 s  \\
+\bottomrule
+\end{tabular}
+\caption{Tempo de geração das distâncias por técnica. O comportamento
+atípico de \texttt{netsmf}, cujo tempo praticamente não varia com o
+tamanho da instância, decorre do uso de \texttt{multiprocessing} com dez
+processos: em instâncias pequenas o custo de criação dos processos domina
+o tempo total.}
+\label{tab:tempos}
+\end{table}
+
+\end{document}
