@@ -1,0 +1,12 @@
+cogdl==0.6
+torch
+numpy
+scipy
+scikit-learn
+networkx
+gensim   # usado por node2vec (Word2Vec)
+tqdm     # usado por sdne/line/netsmf (barras de progresso)
+# cogdl 0.6 importa optuna, cuja parte de visualizacao usa uma API do
+# matplotlib removida a partir da 3.9 (matplotlib.cm.get_cmap). Fixar
+# matplotlib<3.9 evita o crash no "import cogdl".
+matplotlib<3.9
