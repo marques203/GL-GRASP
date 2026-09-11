@@ -36,7 +36,9 @@ unsigned check_algorithm_name(int argc, char *argv[]) {
 
 	if (strcmp(algorithm, "lsolver") == 0 ) return 5;
 
-	return 6;
+	if (strcmp(algorithm, "glgrasp") == 0 ) return 6;
+
+	return 7;
 }
 
 bool correct_cplex_parameter(int argc, char *argv[]) {
@@ -148,6 +150,62 @@ bool correct_grasp_parameter(int argc, char *argv[]) {
 				cerr << " - [13]: threshold for access to the elite set, a real value in the range [0, 1]" << endl;
 				exit(0);
 			}
+		}
+	}
+
+	return true;
+
+}
+
+bool correct_glgrasp_parameter(int argc, char *argv[]) {
+
+	// Parametros [3] a [10] sao os mesmos do grasp; alem deles:
+	// - [11]: arquivo com as distancias de embedding (obrigatorio)
+	// - [12]: eta_max, numero maximo de iteracoes sem melhora (opcional)
+	if (argc < 12) {
+		cerr << " glgrasp requer o arquivo de distancias no parametro [11]" << endl;
+		cerr << " uso: <instancia> glgrasp <k> <alpha> <busca_local> <max_it> <nome>"
+				" <saida_best> <saida_completa> <tempo_limite> <arquivo_distancias> [eta_max]" << endl;
+		exit(0);
+	}
+	// - check the parameter [3], the k value
+	int k = atoi(argv[3]);
+	if (k < 0) {
+		cerr << " k-value (arg[3]) must be an integer positive value" << endl;
+		exit(0);
+	}
+	// - check the parameter [4], the alpha value
+	double alpha = atof(argv[4]);
+	if (alpha < 0 || alpha > 1) {
+		cerr << " apha-value (arg[4]) must be a real nonnegative value in the range [0,1]" << endl;
+		exit(0);
+	}
+	// - check the parameter [5], local_search
+	char *ls = argv[5];
+	if (strcmp(ls, "first") != 0 && strcmp(ls, "best") != 0 &&
+		strcmp(ls, "no") != 0 && strcmp(ls, "first-prepro") != 0) {
+		cerr << " Selected local-search (arg[5]) incorrect!" << endl;
+		cerr << " - Possible choices {first, first-prepro, best, no}" << endl;
+		exit(0);
+	}
+	// - check the parameter [6], max_iteration
+	int maxit = atoi(argv[6]);
+	if (maxit < 1 || maxit > 1000000) {
+		cerr << " max-it (arg[6]) must be an integer positive value in the range [10, 1000000]" << endl;
+		exit(0);
+	}
+	// - check the parameter [10], the time-limit
+	int tl = atoi(argv[10]);
+	if (tl < 10 || tl > 3600) {
+		cerr << " time-limit (arg[10]) must be an integer positive value in the range [10, 3600]" << endl;
+		exit(0);
+	}
+	// - check the parameter [12], eta_max (optional)
+	if (argc > 12) {
+		int eta_max = atoi(argv[12]);
+		if (eta_max < 1) {
+			cerr << " eta_max (arg[12]) must be an integer positive value" << endl;
+			exit(0);
 		}
 	}
 
@@ -283,6 +341,18 @@ unsigned input_manager(char argc, char *argv[]) {
 			return 5;
 	}
 	break;
+	case(6):
+	{
+		if (correct_glgrasp_parameter(argc, argv))
+			return 6;
+	}
+	break;
+	default:
+	{
+		cerr << " Selected algorithm (arg[2]) incorrect!" << endl;
+		cerr << " - Possible choices {cplex, grasp1, grasp2, grasp3, tabu, lsolver, glgrasp}" << endl;
+		exit(0);
+	}
 	}
 
 	return 0;

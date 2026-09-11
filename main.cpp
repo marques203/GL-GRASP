@@ -13,6 +13,7 @@
 #include "GRASPv1.h"
 #include "GRASPv2.h"
 #include "GRASPv3.h"
+#include "GLGRASP.h"
 #include "TABU.h"
 #include <time.h>
 #include <ios>
@@ -97,6 +98,28 @@ int main(int argc, char *argv[]) {
 		if ((int)k <= I.get_MIN_INCREMENTAL_NUMBER(I)) {
 			TABU T(I, argv);
 			T.algorithm(I, argc, argv);
+		}
+
+	}
+	break;
+	case(6):
+	{
+
+		if ((int)k <= I.get_MIN_INCREMENTAL_NUMBER(I)) {
+
+			GLGRASP G(I, argv);
+
+			// argv[11]: arquivo de distancias gerado pelo modulo Python
+			if (G.load_distances(argv[11], I)) {
+
+				// argv[12] (opcional): eta_max, iteracoes sem melhora
+				if (argc > 12)
+					G.set_eta_max(atoi(argv[12]));
+
+				G.algorithm(I, argc, argv);
+
+			}
+
 		}
 
 	}

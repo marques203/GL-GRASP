@@ -36,7 +36,7 @@ Exemplo:
 ./C-IGDP.exe instance/incgraph_13_0.06_5_30_1.20_1.txt grasp3 1 0 best 100 teste teste_best.txt teste_k1.txt 300
 ```
 
-- `algoritmo`: `grasp1`, `grasp2`, `grasp3`, `tabu` (ou `cplex`/`lsolver`, se compilados)
+- `algoritmo`: `grasp1`, `grasp2`, `grasp3`, `tabu`, `glgrasp` (ou `cplex`/`lsolver`, se compilados)
 - `k`: deslocamento máximo permitido de um nó original em relação à sua posição
   original (quanto maior, mais liberdade o algoritmo tem para reduzir cruzamentos —
   mas só é aceito se todo nível da instância tiver pelo menos `k` nós incrementais,
@@ -50,6 +50,62 @@ Exemplo:
 > **Aviso sobre reprodutibilidade:** o gerador de números aleatórios (`MTRand`) é
 > semeado a partir do relógio do sistema a cada execução, então rodar o mesmo
 > comando duas vezes produz resultados ligeiramente diferentes.
+
+## GL-GRASP (`glgrasp`)
+
+Implementa a metodologia de Charytitsch e Nascimento (2026): a fase de construção
+do GRASP passa a ser guiada pelas **distâncias estruturais** obtidas de *node
+embeddings*, em vez do número de cruzamentos adicionais. A busca local
+(*swap* + *insert*) é a mesma do `grasp3`.
+
+Exige um argumento a mais — o arquivo de distâncias gerado pelo módulo Python
+(ver [`embeddings/`](embeddings/)):
+
+```bash
+./C-IGDP.exe <instancia> glgrasp <k> <alpha> <busca_local> <max_it> <nome> <saida_best.txt> <saida_completa.txt> <tempo_limite> <arquivo_distancias> [eta_max]
+```
+
+Exemplo completo (gerar as distâncias e rodar):
+
+```bash
+cd embeddings && python build_distances.py ../instance/incgraph_6_0.06_5_30_1.20_1.txt -t hope && cd ..
+./C-IGDP.exe instance/incgraph_6_0.06_5_30_1.20_1.txt glgrasp 1 0 best 100 teste gl_best.txt gl_full.txt 60 embeddings/distances/incgraph_6_0.06_5_30_1.20_1.hope.dist.txt
+```
+
+- `arquivo_distancias`: caminho do `.dist.txt`. Trocar a técnica de *embedding*
+  é só apontar para outro arquivo — é assim que se compara `hope`, `spectral`,
+  `node2vec`, `sdne`, `line`, `grarep`, `netsmf` e `prone`.
+- `eta_max` (opcional, padrão `20`): número máximo de iterações **sem melhora**
+  antes de parar ($\eta_{max}$ do artigo). O `grasp3` não tem esse critério —
+  ele sempre roda até `max_it` ou até o tempo-limite.
+
+O programa recusa executar se o arquivo de distâncias não existir ou não
+corresponder à instância (níveis/ids fora da faixa), em vez de produzir
+resultados silenciosamente errados.
+
+### O que muda em relação ao `grasp3`
+
+| Elemento | `grasp3` (Napoletano et al., 2019) | `glgrasp` |
+|---|---|---|
+| Critério guloso $\mathcal{G}(u)$ | mínimo de cruzamentos adicionais entre todas as posições viáveis | menor distância de *embedding* aos vizinhos já posicionados (Eq. 11) |
+| Limiar da RCL | $\xi = \min + \varphi(\max-\min)$ | mesma fórmula (Eq. 12) |
+| Posição de inserção | a que minimiza cruzamentos | sorteada entre: mais próxima do vizinho **mais próximo**, do **mais distante** e da **média** (Step 5) |
+| Parada | `max_it` / tempo-limite | idem + $\eta_{max}$ iterações sem melhora |
+| Busca local | *swap* + *insert* | idêntica |
+
+Comparação medida (mesma máquina, `k=1`, `alpha=0`, `best`, `max_it=100`,
+técnica `hope`):
+
+| Instância | `grasp3` | `glgrasp` |
+|---|---|---|
+| `incgraph_6_0.06_..._1.20_1` | 1073 em 0,17 s | **1070** em 0,06 s |
+| `incgraph_6_0.30_..._1.60_1` | **23845** em 8,94 s | 23844 em 1,41 s |
+| `incgraph_13_0.17_..._1.60_1` | **26784** em 14,43 s | 26786 em 2,62 s |
+| `incgraph_20_0.30_..._1.60_1` | **179902** em 60,38 s | 179944 em 26,73 s |
+
+Qualidade equivalente com 2–6× menos tempo, o que é coerente com o relatado no
+artigo: a construção deixa de enumerar todas as posições viáveis com o custo de
+cruzamento de cada uma.
 
 ## Bateria de testes (`test_battery.sh`)
 

@@ -18,6 +18,7 @@ LDFLAGS  := -static
 TARGET   := C-IGDP.exe
 
 SRCS := main.cpp HDAG.cpp GRASP.cpp GRASPv1.cpp GRASPv2.cpp GRASPv3.cpp \
+        GLGRASP.cpp EmbeddingDistances.cpp \
         TABU.cpp EliteSet.cpp PathRelinking.cpp SolutionIMLCM.cpp SolutionMLCM.cpp
 
 ifdef WITH_CPLEX
