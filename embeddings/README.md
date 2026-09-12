@@ -42,7 +42,8 @@ pip install -r requirements.txt
 ## Uso
 
 ```bash
-python build_distances.py <instancia.txt> [saida.txt] [--technique T] [--dim N] [--param k=v ...]
+python build_distances.py <instancia.txt> [saida.txt] [--technique T] [--dim N]
+                          [--pca-dim N] [--metric M] [--param k=v ...]
 ```
 
 - `instancia.txt`: arquivo no mesmo formato lido por `HDAG::read_instance`
@@ -51,6 +52,9 @@ python build_distances.py <instancia.txt> [saida.txt] [--technique T] [--dim N] 
   `embeddings/distances/<instancia>.<tecnica>.dist.txt` (a pasta é criada
   automaticamente). Esses arquivos são regeneráveis e não são versionados
   (ver `.gitignore`). Ignorado quando `--technique all`.
+  Quando `--pca-dim` ou `--metric` diferem do default, o nome ganha sufixos
+  (ex.: `....hope.pca5.chebyshev.dist.txt`), para que execuções com
+  configurações distintas não sobrescrevam umas às outras.
 - `--technique` / `-t`: uma das 8 da tabela acima, ou `all` para rodar
   todas de uma vez (um arquivo de saída por técnica; se uma falhar, as
   outras continuam — resumo impresso no final). Default: `hope`.
@@ -62,6 +66,19 @@ python build_distances.py <instancia.txt> [saida.txt] [--technique T] [--dim N] 
   limitar pelo tamanho do grafo**: se a instância for pequena o bastante
   para uma técnica baseada em SVD não comportar `dim=128`, o script vai
   falhar naquela técnica em vez de reduzir a dimensão silenciosamente).
+- `--pca-dim`: dimensão da projeção PCA aplicada **sobre** o embedding.
+  Default `2` (o artigo projeta sobre um plano). É independente de `--dim`:
+  `--dim` é a dimensão do embedding gerado pela técnica, `--pca-dim` é a
+  dimensão depois da redução. O valor é limitado a
+  `min(nº de vértices, nº de dimensões do embedding)` — acima disso o script
+  falha com mensagem explícita, em vez do erro cru do scikit-learn.
+- `--metric`: métrica usada entre vértices adjacentes —
+  `euclidean` (default, $L_2$), `manhattan` ($L_1$) ou `chebyshev` ($L_\infty$).
+
+  > **Atenção metodológica:** a distância euclidiana é invariante a rotação,
+  > mas $L_1$ e $L_\infty$ **não são**. Como o PCA escolhe uma base de
+  > coordenadas, o valor dessas duas métricas depende dessa base. É uma
+  > escolha válida de experimento, mas convém registrar isso no texto.
 - `--param k=v` (repetível): sobrescreve um parâmetro específico da
   técnica escolhida (ex.: `--param walk_num=20 --param window_size=10`
   para `node2vec`). Sem `--param`, todo parâmetro que não seja a dimensão
