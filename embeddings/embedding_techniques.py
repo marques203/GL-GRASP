@@ -65,7 +65,12 @@ def _build_model(technique: str, dimension: int, params: dict):
             p.pop("walk_length", 80),
             p.pop("walk_num", 40),
             p.pop("window_size", 5),
-            p.pop("worker", 10),
+            # O CogDL usa worker=10 por default, repassado ao Word2Vec do
+            # gensim. Com mais de uma thread o treino NAO e reproduzivel nem
+            # com a semente fixa (medido). Como queremos o mesmo embedding a
+            # cada execucao, o default aqui e 1. Custa ~2x o tempo de geracao
+            # e nao altera o algoritmo, so o paralelismo.
+            p.pop("worker", 1),
             p.pop("iteration", 10),
             p.pop("p", 1.0),
             p.pop("q", 1.0),

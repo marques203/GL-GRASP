@@ -45,6 +45,10 @@ DEFAULT_OUTPUT_DIR = Path(__file__).parent / "distances"
 DEFAULT_PCA_DIM = 2
 DEFAULT_METRIC = "euclidean"
 
+# O GL-GRASP usa um unico embedding durante toda a execucao, logo a geracao e
+# semeada por default: o mesmo comando sempre produz o mesmo .dist.txt.
+DEFAULT_SEED = 1
+
 METRICS = ["euclidean", "manhattan", "chebyshev", "cosine"]
 
 
@@ -102,7 +106,8 @@ def write_distances(path: Path, distances: list) -> None:
 
 def default_output_path(instance_path: str, technique: str,
                         pca_dimension: int = DEFAULT_PCA_DIM,
-                        metric: str = DEFAULT_METRIC) -> Path:
+                        metric: str = DEFAULT_METRIC,
+                        seed: int = DEFAULT_SEED) -> Path:
     DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Sufixos so aparecem quando o valor difere do default, para nao quebrar
@@ -112,8 +117,34 @@ def default_output_path(instance_path: str, technique: str,
         suffix += f".pca{pca_dimension}"
     if metric != DEFAULT_METRIC:
         suffix += f".{metric}"
+    if seed != DEFAULT_SEED:
+        suffix += f".r{seed}"
 
     return DEFAULT_OUTPUT_DIR / f"{Path(instance_path).stem}.{technique}{suffix}.dist.txt"
+
+
+def set_global_seed(seed: int) -> None:
+    """Semeia os geradores que as tecnicas do CogDL usam.
+
+    node2vec (caminhadas aleatorias + SGD do gensim), SDNE (inicializacao de
+    pesos) e LINE (amostragem negativa) nao sao deterministicas: sem semente,
+    rodar duas vezes no mesmo grafo da embeddings diferentes. spectral, hope,
+    grarep, netsmf e prone sao deterministicas (medido).
+
+    O GL-GRASP usa UM embedding fixo durante toda a execucao, logo semeamos
+    por default: o mesmo comando sempre produz o mesmo arquivo de distancias,
+    e o experimento fica reproduzivel ponta a ponta.
+    """
+    import random as _random
+    _random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
 
 
 def run_one(instance, instance_path: str, technique: str, output_path: Path, dimension, params,
@@ -168,6 +199,14 @@ def main():
         help=f"metrica de distancia entre vertices adjacentes (default: {DEFAULT_METRIC})"
     )
     parser.add_argument(
+        "--seed", type=int, default=DEFAULT_SEED,
+        help=f"semente dos geradores aleatorios (default: {DEFAULT_SEED}). "
+             "Com a semente default o mesmo comando sempre produz o mesmo "
+             "arquivo, inclusive para node2vec, sdne e line, que sao "
+             "estocasticas. Outra semente gera um embedding diferente e o "
+             "arquivo recebe o sufixo .r<semente>"
+    )
+    parser.add_argument(
         "--param", action="append", metavar="k=v", help="sobrescreve um parametro especifico da tecnica (repetivel)"
     )
     args = parser.parse_args()
@@ -175,6 +214,8 @@ def main():
 
     if args.pca_dim < 1:
         parser.error("--pca-dim deve ser um inteiro positivo")
+
+    set_global_seed(args.seed)
 
     instance = read_instance(args.instance)
     print(f"instancia: {instance.num_levels} niveis, {instance.num_nodes} vertices, {len(instance.arcs)} arcos")
@@ -186,8 +227,12 @@ def main():
         output_path = (
             Path(args.output)
             if (args.output and args.technique != "all")
-            else default_output_path(args.instance, technique, args.pca_dim, args.metric)
+            else default_output_path(args.instance, technique, args.pca_dim,
+                                     args.metric, args.seed)
         )
+        # cada tecnica parte da mesma semente, para que a semente de uma nao
+        # dependa de quantas tecnicas rodaram antes dela
+        set_global_seed(args.seed)
         try:
             run_one(instance, args.instance, technique, output_path, args.dim, params,
                     args.pca_dim, args.metric)
