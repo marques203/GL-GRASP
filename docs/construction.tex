@@ -1,0 +1,346 @@
+% =====================================================================
+%  Fase de construcao do GL-GRASP: GLGRASP::construction()
+%
+%  Para colar no TG, copie a partir de \section{...} e garanta que o
+%  preambulo tenha os pacotes listados abaixo.
+% =====================================================================
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+
+\lstdefinestyle{cpp}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  frame=single,
+  rulecolor=\color{gray!60},
+  backgroundcolor=\color{gray!5},
+  columns=fullflexible,
+  breaklines=true,
+  showstringspaces=false,
+  aboveskip=6pt,
+  belowskip=6pt
+}
+\lstset{style=cpp}
+
+\tikzset{
+  passo/.style = {rectangle, draw=black, thick, text width=4.6cm,
+                  minimum height=0.8cm, align=center, font=\small},
+  func/.style  = {rectangle, draw=black, thick, fill=gray!10,
+                  text width=5.6cm, minimum height=0.8cm, align=center,
+                  font=\small\ttfamily},
+  dec/.style   = {diamond, aspect=2.2, draw=black, thick, text width=2.2cm,
+                  align=center, font=\small, inner sep=1pt},
+  ini/.style   = {rectangle, rounded corners=8pt, draw=black, thick,
+                  fill=gray!20, text width=2.4cm, minimum height=0.7cm,
+                  align=center, font=\small\bfseries},
+  seta/.style  = {-{Stealth[length=2.5mm]}, thick},
+  rot/.style   = {font=\scriptsize}
+}
+
+\newenvironment{artigo}
+  {\begin{quote}\small\itshape}
+  {\end{quote}}
+
+\begin{document}
+
+\section{Fase de construção do GL-GRASP}
+\label{sec:construction}
+
+\subsection{Objetivo}
+
+A função \texttt{GLGRASP::construction()} gera uma solução completa a
+partir do desenho original: insere os vértices incrementais um a um,
+escolhendo a cada passo \emph{qual} vértice inserir e \emph{em qual
+posição}. Ela implementa a \textit{Construction Phase} da Figura~3 de
+Charytitsch e Nascimento (2026), correspondente aos \textit{Steps} 1 a 7
+da Seção~4.3, e é chamada pela função \texttt{run()} uma vez a cada
+iteração do GRASP.
+
+\subsection{Estruturas envolvidas}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Estruturas de dados da fase de construção e sua correspondência
+com a notação do artigo.}
+\label{tab:estruturas-construcao}
+\begin{tabularx}{\textwidth}{@{}l X c@{}}
+\toprule
+Estrutura & Significado & Artigo \\
+\midrule
+\texttt{S} & solução parcial em construção & $I'$ \\
+\texttt{CL} & vértices incrementais ainda não inseridos & $CL$ \\
+\texttt{G[l][i]} & menor distância de \textit{embedding} entre o vértice
+  e seus vizinhos já presentes em \texttt{S} & $\mathcal{G}(u)$ \\
+\texttt{RCL} & subconjunto de \texttt{CL} com $\mathcal{G}$ abaixo do
+  limiar & $RCL$ \\
+\texttt{getalpha()} & parâmetro de gulosidade, sorteado em
+  \texttt{algorithm()} & $\varphi$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Implementação}
+
+\subsubsection{Inicialização}
+
+\begin{lstlisting}
+initialize_all_iteration_structure(I);
+set_start_iteration(chrono::steady_clock::now());
+MTRand rng(getseed());
+\end{lstlisting}
+
+Reinicia a lista de candidatos e os contadores da iteração anterior,
+registra o instante inicial e cria o gerador aleatório da construção,
+usado na extração de vértices da RCL e na escolha de posição.
+
+\subsubsection{Steps 1 e 2 --- solução parcial inicial}
+
+\begin{lstlisting}
+allocate_solution(I, S);
+\end{lstlisting}
+
+Aloca \texttt{S}, insere cada vértice original na sua posição original
+$\pi_0$ e marca \texttt{CL[l][i] = 0}. Os vértices incrementais
+permanecem com \texttt{CL[l][i] = 1}, e suas posições em \texttt{S} ficam
+vazias.
+
+\begin{artigo}
+Step 1: $I'$ contém apenas os vértices originais.
+Step 2: a lista de candidatos inicial é $CL = \hat{V}$.
+\end{artigo}
+
+\subsubsection{Step 3 --- critério guloso}
+
+\begin{lstlisting}
+init_G(I, S);
+\end{lstlisting}
+
+Para cada vértice $u \in CL$, calcula
+\begin{equation}
+\mathcal{G}(u) = \min_{(u,v),\,(v,u)\,\in\,I'} d(v,u)
+\label{eq:G}
+\end{equation}
+percorrendo as listas de adjacência \texttt{FWD} (vizinhos no nível
+$\lambda+1$) e \texttt{BWD} (vizinhos no nível $\lambda-1$) e considerando
+apenas vizinhos com \texttt{CL == 0}, isto é, já presentes na solução
+parcial. Se $u$ não possui nenhum vizinho em \texttt{S}, define-se
+$\mathcal{G}(u) = \infty$.
+
+\subsubsection{Step 4 --- lista restrita de candidatos}
+
+\begin{lstlisting}
+rebuild_RCL(I, S);
+\end{lstlisting}
+
+Calcula o limiar sobre os valores finitos de $\mathcal{G}$ em $CL$,
+\begin{equation}
+\xi = \mathcal{G}_{min} + \varphi\,(\mathcal{G}_{max} - \mathcal{G}_{min}),
+\label{eq:xi}
+\end{equation}
+e define $RCL = \{v \in CL : \mathcal{G}(v) \le \xi\}$. Vértices com
+$\mathcal{G} = \infty$ só entram na RCL quando não há nenhum candidato
+com valor finito.
+
+\subsubsection{Laço principal}
+
+\begin{lstlisting}
+while (getTotalToAssign() > 0) {
+    pair<unsigned, unsigned> p = extract_from_RCL(rng);
+    unsigned new_pos = choose_position(I, S, p.first, p.second, rng);
+    insert_node(I, S, p.first, p.second, new_pos);
+    update_G_after_insertion(I, S, p.first, p.second);
+    rebuild_RCL(I, S);
+}
+\end{lstlisting}
+
+O laço executa enquanto $CL$ não estiver vazia, e cada iteração insere
+exatamente um vértice, em quatro etapas.
+
+\paragraph{Seleção do vértice.}
+\texttt{extract\_from\_RCL} sorteia um vértice da RCL e devolve o par
+\texttt{p = (nível, posição original)}.
+
+\begin{artigo}
+Step 5: selecione um vértice $v \in RCL$ aleatoriamente.
+\end{artigo}
+
+\paragraph{Seleção da posição.}
+\texttt{choose\_position} constrói o conjunto $P$ de posições candidatas:
+para cada nível adjacente que possua vizinhos de $v$ já em \texttt{S},
+sorteia entre a posição do vizinho de menor distância e a do vizinho de
+maior distância; em seguida acrescenta a posição média dos elementos de
+$P$; por fim, escolhe um elemento de $P$ aleatoriamente. Cada posição
+candidata é ajustada para a posição viável mais próxima, respeitando a
+restrição de deslocamento máximo $k$.
+
+\begin{artigo}
+Step 5: (a) para cada camada vizinha, escolha aleatoriamente entre a
+posição disponível mais próxima do vizinho mais próximo e a do vizinho
+mais distante; (b) adicione a posição disponível mais próxima da média das
+posições em $P$; (c) escolha arbitrariamente uma posição de $P$.
+\end{artigo}
+
+\paragraph{Inserção.}
+\texttt{insert\_node} insere o vértice em \texttt{new\_pos}, deslocando o
+bloco de vértices ocupado uma posição acima quando necessário, e define
+\texttt{CL[l][i] = 0}.
+
+\begin{artigo}
+Step 6: remova $v$ de $CL$.
+\end{artigo}
+
+\paragraph{Atualização.}
+O vértice inserido passa a ser um vizinho posicionado dos vértices
+adjacentes que ainda estão em $CL$. Para cada um deles,
+\texttt{update\_G\_after\_insertion} aplica
+$\mathcal{G} \leftarrow \min(\mathcal{G}, d)$, onde $d$ é a distância do
+arco que os liga ao vértice recém-inserido. Em seguida, a RCL é
+reconstruída.
+
+\begin{artigo}
+Step 6: se $CL$ não estiver vazia, volte ao Step 3.
+\end{artigo}
+
+Como $\mathcal{G}$ é definido como um mínimo e a inserção acrescenta
+exatamente um vizinho posicionado, a atualização é exata e custa
+$O(\text{grau})$, em vez de recalcular $\mathcal{G}$ para todos os
+vértices de $CL$. Essa é a otimização sugerida no próprio artigo.
+
+\subsubsection{Verificação final}
+
+\begin{lstlisting}
+if (!S.is_feasible(I, getk()))
+    cerr << " NOT FEASIBLE!!! " << endl;
+\end{lstlisting}
+
+Verifica se nenhum vértice original violou a restrição
+$|\pi_0(v) - \pi(v)| \le k$. A verificação não foi acionada em nenhuma das
+12\,150 execuções realizadas.
+
+\begin{artigo}
+Step 7: retorne $I'$.
+\end{artigo}
+
+\subsection{Exemplo}
+
+Considere um grafo com dois níveis. No nível~0 estão os vértices
+originais $a$ e $b$ e o incremental $e$; no nível~1, os originais $c$ e
+$d$ e o incremental $f$. A solução parcial inicial é:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & posição 0 & posição 1 & posição 2 \\
+\midrule
+nível 0 & $a$ & $b$ & --- \\
+nível 1 & $c$ & $d$ & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Os arcos e as distâncias de \textit{embedding} relevantes são
+$d(e,d) = 0{,}40$, $d(b,f) = 0{,}05$ e $d(e,f) = 0{,}30$.
+
+\paragraph{Critério inicial.} Considerando apenas vizinhos já presentes
+em $I'$:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Vértice & Vizinhos em $I'$ & $\mathcal{G}$ \\
+\midrule
+$e$ & $d$ (0,40); $f$ ainda não está em $I'$ & 0,40 \\
+$f$ & $b$ (0,05); $e$ ainda não está em $I'$ & 0,05 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{RCL.} Com $\varphi = 0{,}5$, pela
+Equação~\eqref{eq:xi}:
+$\xi = 0{,}05 + 0{,}5\,(0{,}40 - 0{,}05) = 0{,}225$.
+Logo, $RCL = \{f\}$.
+
+\paragraph{Iteração 1.}
+\begin{enumerate}
+  \item Seleciona $f$.
+  \item O vizinho de menor distância em $I'$ é $b$, com $\pi(b) = 1$; a
+        posição-alvo é 1 no nível~1.
+  \item Insere $f$ na posição 1; $d$ é deslocado para a posição 2, o que
+        exige $k \ge 1$.
+  \item Atualiza $\mathcal{G}$: $e$ é adjacente a $f$ com
+        $d(e,f) = 0{,}30$ e $f$ agora pertence a $I'$, portanto
+        $\mathcal{G}(e) = \min(0{,}40;\ 0{,}30) = 0{,}30$.
+  \item $RCL = \{e\}$.
+\end{enumerate}
+
+\paragraph{Iteração 2.}
+\begin{enumerate}
+  \item Seleciona $e$.
+  \item Seus vizinhos em $I'$ são $d$ ($\pi = 2$) e $f$ ($\pi = 1$); a
+        posição é escolhida a partir deles.
+  \item Insere $e$.
+  \item $CL = \emptyset$; a construção termina.
+\end{enumerate}
+
+Na iteração~1, o valor de $\mathcal{G}(e)$ foi alterado pela inserção do
+vértice anterior. Por isso a ordem de inserção afeta o resultado, e a
+extração aleatória da RCL faz com que iterações distintas do GRASP
+produzam soluções distintas.
+
+\subsection{Fluxograma}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.78\textwidth}{!}{%
+\begin{tikzpicture}[node distance=0.75cm]
+  \node (ini)   [ini] {Início};
+  \node (s12)   [func, below=of ini]   {allocate\_solution()};
+  \node (s3)    [func, below=of s12]   {init\_G()};
+  \node (s4)    [func, below=of s3]    {rebuild\_RCL()};
+  \node (dec)   [dec,  below=1.0cm of s4] {$CL = \emptyset$?};
+  \node (fim)   [ini,  right=1.6cm of dec] {Fim};
+  \node (s5)    [func, below=1.0cm of dec] {extract\_from\_RCL()};
+  \node (s5b)   [func, below=of s5]    {choose\_position()};
+  \node (s6)    [func, below=of s5b]   {insert\_node()};
+  \node (s6b)   [func, below=of s6]    {update\_G\_after\_insertion()};
+  \node (s4b)   [func, below=of s6b]   {rebuild\_RCL()};
+
+  \node [right=0.25cm of s12, rot, align=left] {Steps 1--2};
+  \node [right=0.25cm of s3,  rot, align=left] {Step 3};
+  \node [right=0.25cm of s4,  rot, align=left] {Step 4};
+  \node [right=0.25cm of s5,  rot, align=left] {Step 5};
+  \node [right=0.25cm of s5b, rot, align=left] {Step 5 (a)--(c)};
+  \node [right=0.25cm of s6,  rot, align=left] {Step 6};
+  \node [right=0.25cm of s6b, rot, align=left] {Step 6};
+  \node [right=0.25cm of s4b, rot, align=left] {Step 4};
+
+  \draw [seta] (ini) -- (s12);
+  \draw [seta] (s12) -- (s3);
+  \draw [seta] (s3)  -- (s4);
+  \draw [seta] (s4)  -- (dec);
+  \draw [seta] (dec) -- node[above, rot] {sim} (fim);
+  \draw [seta] (dec) -- node[right, rot] {não} (s5);
+  \draw [seta] (s5)  -- (s5b);
+  \draw [seta] (s5b) -- (s6);
+  \draw [seta] (s6)  -- (s6b);
+  \draw [seta] (s6b) -- (s4b);
+  \draw [seta] (s4b.west) -- ++(-1.1,0) |- (dec.west);
+\end{tikzpicture}}
+\caption{Fluxo de execução de \texttt{GLGRASP::construction()}, com a
+correspondência de cada chamada aos \textit{Steps} da Seção~4.3 do artigo
+de referência.}
+\label{fig:construction}
+\end{figure}
+
+\end{document}

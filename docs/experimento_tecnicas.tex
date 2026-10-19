@@ -1,0 +1,312 @@
+% =====================================================================
+%  Experimento comparativo: GL-GRASP com 8 tecnicas de embedding x GRASP2
+%
+%  Para colar no TG, copie a partir de \section{...} e garanta que o
+%  preambulo tenha os pacotes listados abaixo.
+% =====================================================================
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazilian]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}   % para o \resizebox da tabela de recortes
+\usepackage{multirow}
+\usepackage{siunitx}
+
+\begin{document}
+
+\section{Experimento comparativo entre técnicas de \textit{embedding}}
+\label{sec:experimento-tecnicas}
+
+\subsection{Objetivo}
+
+Este experimento responde a duas perguntas:
+
+\begin{enumerate}
+  \item O GL-GRASP, alimentado por cada uma das oito técnicas de
+        \textit{Graph Representation Learning}, supera o GRASP2 de
+        Napoletano et al.\ (2019)?
+  \item A escolha da técnica de \textit{embedding} afeta a qualidade das
+        soluções?
+\end{enumerate}
+
+\subsection{Metodologia}
+\label{sec:metodologia-exp}
+
+\subsubsection{Configuração dos algoritmos}
+
+Todos os métodos usaram $\eta = 100$ iterações máximas e
+$\eta_{max} = 20$ iterações sem melhora como critério de parada, com
+limite de \SI{300}{\second} por execução, busca local \texttt{best} e
+$\varphi$ sorteado uniformemente em $[0,1]$ a cada iteração.
+
+É importante registrar que $\eta_{max}$ foi aplicado \emph{também} ao
+GRASP2, seguindo o que o artigo de referência especifica. O código
+original de Napoletano et al.\ não implementa esse critério --- ele foi
+acrescentado neste trabalho. Sem isso, o GRASP2 executaria sempre as 100
+iterações enquanto o GL-GRASP pararia antes, e a comparação atribuiria ao
+método uma vantagem de tempo que na verdade decorre apenas de executar
+menos iterações.
+
+As distâncias estruturais foram geradas com distância euclidiana sobre a
+projeção PCA bidimensional dos \textit{embeddings}, com os
+hiperparâmetros \textit{default} da biblioteca CogDL.
+
+\subsubsection{Repetições e sementes}
+
+Como as heurísticas são estocásticas, uma execução isolada é apenas uma
+amostra da distribuição de resultados possíveis. Cada configuração foi
+portanto executada \textbf{30 vezes}, número adotado no artigo de
+referência.
+
+As sementes do gerador de números aleatórios foram fixadas em $1$ a $30$,
+e \textbf{a repetição $r$ usa a semente $r$ em todos os nove métodos}.
+Esse arranjo, conhecido como \textit{common random numbers}, faz com que
+na mesma repetição todos os algoritmos enfrentem a mesma sequência de
+sorteios: parte da variabilidade se cancela dentro do par comparado,
+aumentando a sensibilidade do teste estatístico sem custo computacional
+adicional.
+
+\subsubsection{Instâncias}
+
+Foram usadas 18 instâncias do conjunto de \textit{benchmark}, cobrindo
+todas as combinações de número de níveis $\Lambda \in \{6, 13, 20\}$,
+densidade $\rho \in \{0{,}06;\ 0{,}17;\ 0{,}30\}$ e razão de crescimento
+$\{1{,}20;\ 1{,}60\}$, cada uma resolvida para $k \in \{1, 2, 3\}$.
+
+Das 54 combinações instância~$\times$~$k$, nove foram descartadas porque
+$k$ excede o número mínimo de vértices incrementais por nível, condição
+de viabilidade verificada pelo próprio código. Restaram
+\textbf{45 grupos}.
+
+O experimento totalizou $45 \times 9 \times 30 =
+\mathbf{12\,150}$ execuções.
+
+\subsubsection{Teste estatístico}
+
+A comparação segue a metodologia do artigo: as 30 repetições de cada
+método em cada grupo são reduzidas à sua média, e os 45 pares de médias
+resultantes alimentam o \textbf{teste dos postos sinalizados de Wilcoxon}
+pareado.
+
+O teste é pareado porque compara os métodos sobre a mesma instância --- e
+os valores objetivos variam de $\sim$\num{1000} a $\sim$\num{177000}
+cruzamentos entre instâncias, o que tornaria uma comparação não pareada
+inútil. É não paramétrico porque contagens de cruzamentos não seguem
+distribuição normal: o teste ordena as diferenças por magnitude e compara
+a soma dos postos positivos com a dos negativos, de modo que uma única
+instância grande não domina o resultado.
+
+Como são oito comparações simultâneas contra o mesmo \textit{baseline}, a
+probabilidade de algum $p$-valor cruzar o limiar por acaso aumenta.
+Reportamos por isso dois níveis: o convencional de \SI{5}{\percent} e o
+corrigido por Bonferroni, $0{,}05/8 = 0{,}00625$.
+
+Para verificar se as técnicas diferem \emph{entre si}, usamos o teste de
+\textbf{Friedman}, que é a extensão pareada do Wilcoxon para mais de dois
+grupos.
+
+\subsection{Resultados}
+
+\subsubsection{Cada técnica contra o GRASP2}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Desempenho das oito técnicas de \textit{embedding} no GL-GRASP,
+comparadas ao GRASP2. Cada valor agrega 30 repetições em cada um dos 45
+grupos. Gap positivo indica mais cruzamentos que o GRASP2, portanto pior;
+\textit{speedup} acima de 1 indica execução mais rápida. Ordenado pelo
+gap médio.}
+\label{tab:tecnicas-vs-grasp2}
+\begin{tabular}{lrrcrrr}
+\toprule
+Técnica & Gap médio & Gap mediano & V/E/D & $p$ (custo) & \textit{Speedup} & $p$ (tempo) \\
+\midrule
+\texttt{grarep}   & $+0{,}0296\%$ & $+0{,}0024\%$ & 15/4/26 & $0{,}0151^{*}$      & $0{,}67\times$ & $<0{,}0001^{*\dagger}$ \\
+\texttt{line}     & $+0{,}0303\%$ & $+0{,}0050\%$ & 18/1/26 & $0{,}1125$          & $0{,}71\times$ & $0{,}0229^{*}$ \\
+\texttt{prone}    & $+0{,}0342\%$ & $+0{,}0052\%$ & 14/3/28 & $0{,}0140^{*}$      & $1{,}06\times$ & $0{,}0349^{*}$ \\
+\texttt{sdne}     & $+0{,}0378\%$ & $+0{,}0025\%$ & 17/3/25 & $0{,}0341^{*}$      & $1{,}01\times$ & $0{,}3075$ \\
+\texttt{node2vec} & $+0{,}0400\%$ & $+0{,}0021\%$ & 18/3/24 & $0{,}1225$          & $1{,}03\times$ & $0{,}4008$ \\
+\texttt{netsmf}   & $+0{,}0450\%$ & $+0{,}0042\%$ & 16/2/27 & $0{,}0066^{*}$      & $1{,}02\times$ & $0{,}5091$ \\
+\texttt{hope}     & $+0{,}0509\%$ & $+0{,}0036\%$ & 15/4/26 & $0{,}0237^{*}$      & $1{,}08\times$ & $0{,}0074^{*}$ \\
+\texttt{spectral} & $+0{,}0617\%$ & $+0{,}0064\%$ & 15/2/28 & $0{,}0030^{*\dagger}$ & $0{,}87\times$ & $0{,}0005^{*\dagger}$ \\
+\bottomrule
+\end{tabular}
+
+\vspace{2mm}
+\footnotesize
+V/E/D: vitórias/empates/derrotas contra o GRASP2 nos 45 grupos.
+$^{*}$ significativo a \SI{5}{\percent}.
+$^{\dagger}$ significativo após correção de Bonferroni ($p < 0{,}00625$).
+\end{table}
+
+\subsubsection{As técnicas entre si}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Posto médio das técnicas nos 45 grupos (1 = melhor). O teste de
+Friedman não encontrou evidência de diferença entre elas
+($\chi^2 = 3{,}842$; $p = 0{,}798$).}
+\label{tab:postos}
+\begin{tabular}{lr}
+\toprule
+Técnica & Posto médio \\
+\midrule
+\texttt{node2vec} & $4{,}17$ \\
+\texttt{sdne}     & $4{,}23$ \\
+\texttt{line}     & $4{,}44$ \\
+\texttt{prone}    & $4{,}44$ \\
+\texttt{grarep}   & $4{,}53$ \\
+\texttt{hope}     & $4{,}56$ \\
+\texttt{netsmf}   & $4{,}59$ \\
+\texttt{spectral} & $5{,}03$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Mesmo comparando diretamente a técnica de melhor posto
+(\texttt{node2vec}) com a de pior (\texttt{spectral}), o Wilcoxon pareado
+não detecta diferença significativa ($p = 0{,}0616$).
+
+\subsubsection{Gap por característica da instância}
+
+\begin{table}[htbp]
+\centering\scriptsize
+\caption{Gap médio (\%) de cada técnica em relação ao GRASP2, por
+característica da instância. Valores negativos indicam que o GL-GRASP
+superou o GRASP2 naquele recorte.}
+\label{tab:recortes}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrrrr}
+\toprule
+Recorte & Valor & \texttt{spectral} & \texttt{hope} & \texttt{node2vec} & \texttt{sdne} & \texttt{line} & \texttt{grarep} & \texttt{netsmf} & \texttt{prone} \\
+\midrule
+\multirow{3}{*}{Níveis}
+ & 6  & $+0{,}116$ & $+0{,}096$ & $+0{,}060$ & $+0{,}071$ & $+0{,}065$ & $+0{,}073$ & $+0{,}086$ & $+0{,}063$ \\
+ & 13 & $-0{,}012$ & $-0{,}008$ & $-0{,}004$ & $-0{,}016$ & $-0{,}013$ & $-0{,}011$ & $-0{,}004$ & $+0{,}004$ \\
+ & 20 & $+0{,}080$ & $+0{,}065$ & $+0{,}064$ & $+0{,}059$ & $+0{,}040$ & $+0{,}027$ & $+0{,}053$ & $+0{,}035$ \\
+\midrule
+\multirow{3}{*}{Densidade}
+ & $0{,}06$ & $+0{,}120$ & $+0{,}098$ & $+0{,}070$ & $+0{,}068$ & $+0{,}043$ & $+0{,}005$ & $+0{,}090$ & $+0{,}064$ \\
+ & $0{,}17$ & $+0{,}037$ & $+0{,}027$ & $+0{,}043$ & $+0{,}030$ & $+0{,}037$ & $+0{,}055$ & $+0{,}026$ & $+0{,}025$ \\
+ & $0{,}30$ & $+0{,}028$ & $+0{,}028$ & $+0{,}007$ & $+0{,}015$ & $+0{,}011$ & $+0{,}029$ & $+0{,}019$ & $+0{,}014$ \\
+\midrule
+\multirow{2}{*}{Razão}
+ & $1{,}20$ & $+0{,}051$ & $+0{,}060$ & $+0{,}090$ & $+0{,}036$ & $+0{,}054$ & $+0{,}029$ & $+0{,}060$ & $+0{,}072$ \\
+ & $1{,}60$ & $+0{,}069$ & $+0{,}045$ & $+0{,}007$ & $+0{,}039$ & $+0{,}014$ & $+0{,}030$ & $+0{,}035$ & $+0{,}009$ \\
+\midrule
+\multirow{3}{*}{$k$}
+ & 1 & $+0{,}026$ & $+0{,}030$ & $+0{,}021$ & $+0{,}016$ & $+0{,}010$ & $+0{,}013$ & $+0{,}019$ & $+0{,}027$ \\
+ & 2 & $+0{,}078$ & $+0{,}085$ & $+0{,}090$ & $+0{,}059$ & $+0{,}050$ & $+0{,}064$ & $+0{,}082$ & $+0{,}081$ \\
+ & 3 & $+0{,}099$ & $+0{,}026$ & $-0{,}020$ & $+0{,}038$ & $+0{,}032$ & $-0{,}006$ & $+0{,}023$ & $-0{,}044$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Discussão}
+
+\paragraph{A escolha da técnica de \textit{embedding} é irrelevante.}
+Este é o achado mais forte do experimento. O teste de Friedman não
+encontra qualquer evidência de diferença entre as oito técnicas
+($p = 0{,}798$), e nem mesmo a melhor contra a pior é significativa
+($p = 0{,}0616$). Os gaps médios ocupam uma faixa de apenas
+$0{,}032$ ponto percentual, de $+0{,}030\%$ a $+0{,}062\%$. Não há,
+portanto, base para preferir \texttt{hope} ou \texttt{sdne} --- as duas
+destacadas no artigo de referência --- sobre qualquer outra neste
+conjunto de instâncias.
+
+\paragraph{O GRASP2 mantém vantagem pequena mas consistente.}
+Seis das oito técnicas ficam atrás do GRASP2 com significância a
+\SI{5}{\percent}, e \texttt{spectral} resiste até à correção de
+Bonferroni. Todas as oito apresentam gap médio positivo. Ao mesmo tempo,
+os gaps \emph{medianos} ficam entre $+0{,}002\%$ e $+0{,}006\%$: na maior
+instância testada, isso corresponde a cerca de dez cruzamentos em
+\num{177000}. A conclusão correta é que o GRASP2 é
+\emph{estatisticamente} superior, mas sem relevância prática --- o teste
+detecta a diferença porque há 45 pares consistentes, não porque a
+diferença seja grande.
+
+\paragraph{Não há ganho de tempo.}
+Cinco técnicas ficam estatisticamente empatadas com o GRASP2 em tempo, e
+\texttt{grarep}, \texttt{line} e \texttt{spectral} são \emph{mais lentas}
+($0{,}67\times$, $0{,}71\times$ e $0{,}87\times$). Isso contraria a
+expectativa de que substituir a contagem de cruzamentos por uma consulta
+a distâncias pré-calculadas tornaria a construção mais barata. A
+explicação está no \textit{baseline} escolhido: o GRASP2 implementa a
+construção $C_2$, baseada no baricentro semi-guloso, que já é
+computacionalmente leve. A construção caudalosa é a $C_3$ do GRASP3, que
+avalia exaustivamente o número de cruzamentos adicionais de \emph{todas}
+as posições viáveis de cada vértice --- e é contra ela que se espera a
+vantagem do GL-GRASP.
+
+\paragraph{O gap diminui com a densidade.}
+Em todas as oito técnicas o gap cai monotonicamente conforme a densidade
+aumenta (de $\rho = 0{,}06$ para $0{,}30$), chegando a
+$+0{,}007\%$ no melhor caso. Isso é coerente com o artigo de referência,
+que relata o GL-GRASP se saindo melhor em grafos mais densos.
+
+\paragraph{As instâncias de 13 níveis são o único recorte favorável.}
+Sete das oito técnicas apresentam gap negativo nesse grupo, ou seja
+superam o GRASP2. O efeito não aparece nas instâncias de 6 nem de 20
+níveis e, com apenas 15 grupos por recorte, não deve ser tratado como
+conclusivo sem mais instâncias.
+
+\subsection{Limitações}
+
+\begin{itemize}
+  \item \textbf{A referência é o GRASP2, não o ótimo.} O artigo mede o
+        gap contra soluções ótimas obtidas com o Gurobi; aqui a
+        referência é uma heurística. Os valores informam qual dos dois
+        métodos é melhor, mas não a que distância do ótimo cada um está.
+  \item \textbf{Falta o GRASP3.} É o \textit{baseline} contra o qual se
+        espera vantagem do GL-GRASP, pelo custo da construção $C_3$.
+        Comparar apenas com o GRASP2 usa justamente o concorrente mais
+        favorável ao \textit{baseline}.
+  \item \textbf{Subconjunto de instâncias.} Foram usadas 18 das 240
+        instâncias de \textit{benchmark}, com uma semente de geração por
+        combinação de parâmetros.
+  \item \textbf{Métrica única.} Apenas distância euclidiana sobre PCA
+        bidimensional. O módulo implementado também suporta Manhattan,
+        Chebyshev e cosseno, além de projeções em dimensão arbitrária.
+  \item \textbf{Ausência do NPI.} O artigo emprega ainda o
+        \textit{Normalized Primal Integral}, que combina qualidade e
+        tempo numa única medida de convergência, não avaliado aqui.
+\end{itemize}
+
+\subsection{Reprodutibilidade}
+
+Todas as execuções são reproduzíveis: as sementes são fixadas via
+argumento de linha de comando e a medição de tempo usa
+\texttt{steady\_clock}, imune a ajustes de relógio e suspensão da
+máquina. Verificou-se que execuções repetidas com a mesma semente
+produzem resultados idênticos.
+
+Os dados brutos das \num{12150} execuções, com uma linha por execução
+contendo instância, $k$, método, semente, custo e tempo, estão nos
+arquivos:
+
+\begin{itemize}
+  \item \texttt{results\_wilcoxon/runs.csv} --- GRASP2 e \texttt{hope};
+  \item \texttt{results\_all/runs.csv} --- as sete demais técnicas.
+\end{itemize}
+
+Os experimentos são conduzidos por dois scripts:
+
+\begin{itemize}
+  \item \texttt{experiment\_wilcoxon.sh}
+  \item \texttt{resume\_experiment.py}
+\end{itemize}
+
+\begin{sloppypar}
+O segundo é idempotente: relê os resultados já gravados e executa somente
+as combinações faltantes, gravando em disco a cada execução. Foi esse
+desenho que permitiu retomar o experimento sem perda de dados após a
+máquina ser suspensa durante a execução, incidente que interrompeu a
+primeira tentativa.
+\end{sloppypar}
+
+\end{document}

@@ -33,7 +33,7 @@ void Localsolver::solve_model(HDAG &G, char *outfile) {
 	SolutionIMLCM s;
 	double cost = s.getCost(G);
 
-	auto start_chrono = chrono::system_clock::now();
+	auto start_chrono = chrono::steady_clock::now();
 
 	FILE *out_f;
 	out_f = fopen(outfile, "a");
@@ -138,7 +138,7 @@ void Localsolver::solve_model(HDAG &G, char *outfile) {
 //	for (unsigned i = 0; i < N.size(); ++i)
 //		cout << "X= " << X[i].getValue() << endl;
 
-	auto end_chrono = chrono::system_clock::now();
+	auto end_chrono = chrono::steady_clock::now();
 	auto elapsed = chrono::duration_cast<chrono::milliseconds>(end_chrono - start_chrono);
 	set_runtime((double)((double)elapsed.count() / (double)1000));
 	fprintf(out_f, "%0.3f %0.3f %d\n", cost, get_runtime(), 0);

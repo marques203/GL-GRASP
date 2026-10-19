@@ -19,7 +19,7 @@ tau(0), global_min_g(INT32_MAX), global_max_g(0) {
 	setTotalInRCL(0);
 	setTotalToAssign(0);
 	set_best_cost(INT64_MAX);
-	set_start_algorithm(chrono::system_clock::now());
+	set_start_algorithm(chrono::steady_clock::now());
 	allocate_and_build_all_structure(I);
 	compute_degree_matrix(I);
 
@@ -50,18 +50,18 @@ void GRASP_v3::algorithm(HDAG &I, int argc, char *argv[]) {
 			HDAG *S = new HDAG;
 			run(I, *S);
 			S = nullptr;
-			int elapsed = chrono::duration_cast<chrono::milliseconds>(
+			long long elapsed = chrono::duration_cast<chrono::microseconds>(
 					get_end_iteration() - get_start_algorithm()).count();
-			double current = (double) ((double) elapsed / (double) 1000);
+			double current = (double) ((double) elapsed / (double) 1000000);
 			if (current >= getTimeLimit()) {
 				break;
 			}
 		}
 
-		int elapsed = chrono::duration_cast<chrono::milliseconds>(
+		long long elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
-		print_complete_data_out_file(get_best_cost(), current);
+		double current = (double) ((double) elapsed / (double) 1000000);
+		print_summary_complete_out_file(get_best_cost(), current);
 		print_best_data_out_file();
 		close_out_file();
 
@@ -78,7 +78,7 @@ void GRASP_v3::algorithm(HDAG &I, int argc, char *argv[]) {
 	auto *ES = getEliteSet();
 	ES = new Elite_Set(atoi(argv[12]), atof(argv[13]));
 
-//	chrono::time_point<chrono::system_clock> init_cLS = chrono::system_clock::now();
+//	chrono::time_point<chrono::steady_clock> init_cLS = chrono::steady_clock::now();
 
 	for (int i = 0; i < (int)getmaxIter(); i++) {
 		setseed(i % 100);
@@ -89,34 +89,34 @@ void GRASP_v3::algorithm(HDAG &I, int argc, char *argv[]) {
 		run(I, *S);
 		ES->add_to_Elite(*S, S->get_cost());
 		S = nullptr;
-		double elapsed = chrono::duration_cast<chrono::milliseconds>(
+		double elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
+		double current = (double) ((double) elapsed / (double) 1000000);
 		if (current > getTimeLimit()) {
 			break;
 		}
 	}
 
-//	chrono::time_point<chrono::system_clock> end_cLS = chrono::system_clock::now();
-//	chrono::time_point<chrono::system_clock> init_PR = chrono::system_clock::now();
+//	chrono::time_point<chrono::steady_clock> end_cLS = chrono::steady_clock::now();
+//	chrono::time_point<chrono::steady_clock> init_PR = chrono::steady_clock::now();
 
 	double old_best = get_best_cost();
 	auto *PR = getPR();
 	PR = new Path_Relinking(argv[11]);
 	PR->Relink(*ES, get_best_solution(), I);
 	set_best_cost(get_best_solution().get_cost());
-	set_end_iteration(chrono::system_clock::now());
-	double elapsed = chrono::duration_cast<chrono::milliseconds>(
+	set_end_iteration(chrono::steady_clock::now());
+	double elapsed = chrono::duration_cast<chrono::microseconds>(
 			get_end_iteration() - get_start_algorithm()).count();
-	double current = (double) ((double) elapsed / (double) 1000);
+	double current = (double) ((double) elapsed / (double) 1000000);
 	if (old_best > get_best_cost()) {
 		set_time_to_best(current);
 	}
-	print_complete_data_out_file(get_best_cost(), current);
+	print_summary_complete_out_file(get_best_cost(), current);
 	print_best_data_out_file();
 	close_out_file();
 
-/*	chrono::time_point<chrono::system_clock> end_PR = chrono::system_clock::now();
+/*	chrono::time_point<chrono::steady_clock> end_PR = chrono::steady_clock::now();
 
 	double totDur = chrono::duration_cast<chrono::milliseconds>(
 			end_PR - init_cLS).count();
@@ -159,11 +159,11 @@ void GRASP_v3::run(HDAG &I, HDAG &S) {
 
 		S.set_cost(best_cost);
 
-		set_end_iteration(chrono::system_clock::now());
+		set_end_iteration(chrono::steady_clock::now());
 
-		int elapsed = chrono::duration_cast<chrono::milliseconds>(
+		long long elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
+		double current = (double) ((double) elapsed / (double) 1000000);
 
 		if (best_cost < get_best_cost()) {
 
@@ -173,7 +173,7 @@ void GRASP_v3::run(HDAG &I, HDAG &S) {
 		}
 
 
-		print_complete_data_out_file(best_cost, current);
+		print_complete_data_out_file(best_cost, best_cost, current);
 
 		delete_all_iterative_structure(I);
 
@@ -187,7 +187,7 @@ void GRASP_v3::construction(HDAG &I, HDAG &S) {
 
 	initialize_all_iteration_structure(I);
 
-	set_start_iteration(chrono::system_clock::now());
+	set_start_iteration(chrono::steady_clock::now());
 
 	MTRand rng(getseed());
 

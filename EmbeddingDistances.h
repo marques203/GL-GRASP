@@ -22,7 +22,7 @@
 
 class EmbeddingDistances {
 public:
-	EmbeddingDistances() : n_arcs(0) {}
+	EmbeddingDistances() : n_arcs(0), max_dis(0.0) {}
 
 	// Le o arquivo e indexa as distancias nos dois sentidos.
 	// Devolve false (e explica no cerr) se o arquivo nao existir ou nao
@@ -41,8 +41,14 @@ public:
 
 	unsigned get_n_arcs() const { return n_arcs; }
 
+	// Maior distancia do grafo inteiro (max_dis do codigo de referencia,
+	// Cb_*.py). Usada apenas pela semantica "maxdis" de G indefinido.
+	double max_distance() const { return max_dis; }
+
 private:
 	unsigned n_arcs;
+
+	double max_dis;
 
 	// FWD[l][id] : arcos que saem de (l, id) para o nivel l+1
 	std::vector<std::vector<std::vector<std::pair<unsigned, double> > > > FWD;

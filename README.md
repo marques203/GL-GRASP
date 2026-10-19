@@ -62,7 +62,7 @@ Exige um argumento a mais — o arquivo de distâncias gerado pelo módulo Pytho
 (ver [`embeddings/`](embeddings/)):
 
 ```bash
-./C-IGDP.exe <instancia> glgrasp <k> <alpha> <busca_local> <max_it> <nome> <saida_best.txt> <saida_completa.txt> <tempo_limite> <arquivo_distancias> [eta_max]
+./C-IGDP.exe <instancia> glgrasp <k> <alpha> <busca_local> <max_it> <nome> <saida_best.txt> <saida_completa.txt> <tempo_limite> <arquivo_distancias> [eta_max] [semente] [figure|text] [maxdis|inf] [reference|spiral]
 ```
 
 Exemplo completo (gerar as distâncias e rodar):
@@ -74,14 +74,38 @@ cd embeddings && python build_distances.py ../instance/incgraph_6_0.06_5_30_1.20
 
 - `arquivo_distancias`: caminho do `.dist.txt`. Trocar a técnica de *embedding*
   é só apontar para outro arquivo — é assim que se compara `hope`, `spectral`,
-  `node2vec`, `sdne`, `line`, `grarep`, `netsmf` e `prone`.
+  `node2vec`, `sdne`, `line`, `grarep`, `netsmf` e `prone`. O embedding é
+  **fixo durante toda a execução** e sua geração é semeada por padrão, de modo
+  que o mesmo comando sempre produz o mesmo arquivo (ver
+  [`tests/README.md`](tests/README.md)).
 - `eta_max` (opcional, padrão `20`): número máximo de iterações **sem melhora**
   antes de parar ($\eta_{max}$ do artigo). O `grasp3` não tem esse critério —
   ele sempre roda até `max_it` ou até o tempo-limite.
+- `semente` (opcional, padrão `1`): semente do gerador aleatório. A semente da
+  construção de cada iteração é derivada dela, de modo que repetições com
+  sementes diferentes são independentes.
 
 O programa recusa executar se o arquivo de distâncias não existir ou não
 corresponder à instância (níveis/ids fora da faixa), em vez de produzir
 resultados silenciosamente errados.
+
+### Pontos em que o artigo e o código de referência divergem
+
+Em três lugares o artigo é ambíguo ou o código de referência (`Cb_*.py`) faz
+uma escolha que o texto não especifica. **O padrão reproduz o código de
+referência**; a outra leitura fica disponível para medir a diferença.
+
+| Parâmetro | Valor | Significado |
+|---|---|---|
+| `[14]` posição | **`figure`** (padrão) | Step 5 como na **Figura 3** e no código de referência: alvo sorteado uniformemente entre a posição do vizinho mais próximo, a do mais distante e o **ponto médio das duas**, dentro de cada nível e de novo entre os níveis. |
+| | `text` | Step 5 como no **texto**: sorteio entre mais próximo e mais distante por nível, e depois a média do conjunto $P$. Nessa leitura o ponto médio *dentro* de um nível nunca é gerado. |
+| `[15]` $\mathcal{G}$ indefinido | **`maxdis`** (padrão) | Código de referência: $\mathcal{G}(u)$ do vértice sem vizinho posicionado recebe a **maior distância do grafo**, valor que participa do $\max\mathcal{G}$ e portanto **infla $\xi$**, engordando a RCL. Posição sorteada uniformemente no nível. |
+| | `inf` | Vértice sem âncora fica fora da RCL enquanto houver candidato com distância finita, e **não** entra no intervalo $[\min\mathcal{G}, \max\mathcal{G}]$ da Eq. (12). Posição: a viável mais próxima de $\pi_0(v)$. |
+| `[16]` posição viável | **`reference`** (padrão) | `g_vq` do código deles: se o alvo está no primeiro slot livre ou além, insere ali; senão caminha do slot livre **para baixo** em direção ao alvo, parando onde a Claim 2 bloqueia. A posição final fica sempre entre o alvo e o primeiro slot livre. |
+| | `spiral` | Busca em espiral em torno do alvo, aceitando posição dos **dois lados** — leitura literal de "a posição viável mais próxima". |
+
+Com os padrões, a fase de construção é equivalente à do código de referência.
+Para medir o efeito de cada escolha, troque um parâmetro por vez.
 
 ### O que muda em relação ao `grasp3`
 

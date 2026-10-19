@@ -69,6 +69,14 @@ int main(int argc, char *argv[]) {
 
 		if ((int)k <= I.get_MIN_INCREMENTAL_NUMBER(I)) {
 			GRASP_v2 G(I, argv);
+
+			// argv[11]: eta_max (opcional), argv[12]: semente (opcional).
+			// Nao se aplicam quando argc >= 14, que e o modo path relinking.
+			if (argc == 12 || argc == 13)
+				G.set_eta_max(atoi(argv[11]));
+			if (argc == 13)
+				G.set_rng_seed(atoi(argv[12]));
+
 			G.algorithm(I, argc, argv);
 		}
 
@@ -115,6 +123,37 @@ int main(int argc, char *argv[]) {
 				// argv[12] (opcional): eta_max, iteracoes sem melhora
 				if (argc > 12)
 					G.set_eta_max(atoi(argv[12]));
+
+				// argv[13] (opcional): semente do gerador aleatorio
+				if (argc > 13)
+					G.set_rng_seed(atoi(argv[13]));
+
+				// argv[14] (opcional): leitura do Step 5, "figure" (default,
+				// igual ao codigo de referencia) ou "text".
+				if (argc > 14) {
+					if (strcmp(argv[14], "text") == 0)
+						G.set_position_rule(GLGRASP::POS_RULE_TEXT);
+					else
+						G.set_position_rule(GLGRASP::POS_RULE_FIGURE);
+				}
+
+				// argv[15] (opcional): tratamento de G indefinido, "maxdis"
+				// (default, igual ao codigo de referencia) ou "inf".
+				if (argc > 15) {
+					if (strcmp(argv[15], "inf") == 0)
+						G.set_unanchored_rule(GLGRASP::UNANCHORED_INF);
+					else
+						G.set_unanchored_rule(GLGRASP::UNANCHORED_MAXDIS);
+				}
+
+				// argv[16] (opcional): busca de posicao viavel, "reference"
+				// (default, g_vq do codigo deles) ou "spiral".
+				if (argc > 16) {
+					if (strcmp(argv[16], "spiral") == 0)
+						G.set_feasible_search(GLGRASP::SEARCH_SPIRAL);
+					else
+						G.set_feasible_search(GLGRASP::SEARCH_REFERENCE);
+				}
 
 				G.algorithm(I, argc, argv);
 
