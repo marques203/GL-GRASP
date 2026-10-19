@@ -9,7 +9,13 @@
 
 const double GLGRASP::GL_INF = 1e18;
 
-GLGRASP::GLGRASP(HDAG &I, char *argv[]) : eta_max(20) {
+GLGRASP::GLGRASP(HDAG &I, char *argv[]) {
+
+	set_eta_max(20);   // default do artigo
+
+	position_rule = POS_RULE_FIGURE;
+	unanchored_rule = UNANCHORED_MAXDIS;
+	feasible_search = SEARCH_REFERENCE;
 
 	setk(atoi(argv[3]));
 	setseed(1);
@@ -19,7 +25,7 @@ GLGRASP::GLGRASP(HDAG &I, char *argv[]) : eta_max(20) {
 	setTotalInRCL(0);
 	setTotalToAssign(0);
 	set_best_cost(INT64_MAX);
-	set_start_algorithm(chrono::system_clock::now());
+	set_start_algorithm(chrono::steady_clock::now());
 	allocate_and_build_all_structure(I);
 	compute_degree_matrix(I);
 
@@ -36,7 +42,7 @@ void GLGRASP::algorithm(HDAG &I, int argc, char *argv[]) {
 
 	double initial_alpha = getalpha();
 
-	MTRand rng;
+	MTRand rng(get_rng_seed());
 	set_best_out_file(argv[8]);
 	set_complete_out_file(argv[9]);
 	setTimeLimit(atof(argv[10]));
@@ -48,7 +54,16 @@ void GLGRASP::algorithm(HDAG &I, int argc, char *argv[]) {
 
 	for (int i = 0; i < (int) getmaxIter(); i++) {
 
-		setseed(i % 100);
+		// A semente da construcao tem de depender da repeticao, e nao so do
+		// indice da iteracao: com "i % 100" a iteracao i usava a mesma semente
+		// em todas as repeticoes, tornando-as dependentes entre si (desvios
+		// subestimados e p-valores otimistas no Wilcoxon). O codigo de
+		// referencia nao semeia nada, logo cada iteracao la e independente.
+		//
+		// O multiplicador e maior que o max_it maximo aceito pela validacao
+		// de entrada (1000000), logo (repeticao, iteracao) -> semente e
+		// injetivo: duas repeticoes nunca reaproveitam a mesma semente.
+		setseed(get_rng_seed() * 1000003u + (unsigned) i);
 
 		// phi e sorteado a cada iteracao do GRASP (Eq. 12); alpha = 0 na
 		// linha de comando ativa esse modo, como no GRASP_v3.
@@ -70,26 +85,26 @@ void GLGRASP::algorithm(HDAG &I, int argc, char *argv[]) {
 			it_without_improvement++;
 		}
 
-		int elapsed = chrono::duration_cast<chrono::milliseconds>(
+		long long elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
+		double current = (double) ((double) elapsed / (double) 1000000);
 
 		if (current >= getTimeLimit()) {
 			break;
 		}
 
 		// Criterio de parada por estagnacao (eta_max do artigo).
-		if (it_without_improvement >= eta_max) {
+		if (it_without_improvement >= get_eta_max()) {
 			break;
 		}
 
 	}
 
-	int elapsed = chrono::duration_cast<chrono::milliseconds>(
+	long long elapsed = chrono::duration_cast<chrono::microseconds>(
 			get_end_iteration() - get_start_algorithm()).count();
-	double current = (double) ((double) elapsed / (double) 1000);
+	double current = (double) ((double) elapsed / (double) 1000000);
 
-	print_complete_data_out_file(get_best_cost(), current);
+	print_summary_complete_out_file(get_best_cost(), current);
 	print_best_data_out_file();
 	close_out_file();
 
@@ -116,18 +131,18 @@ void GLGRASP::run(HDAG &I, HDAG &S) {
 
 		S.set_cost(best_cost);
 
-		set_end_iteration(chrono::system_clock::now());
+		set_end_iteration(chrono::steady_clock::now());
 
-		int elapsed = chrono::duration_cast<chrono::milliseconds>(
+		long long elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
+		double current = (double) ((double) elapsed / (double) 1000000);
 
 		if (best_cost < get_best_cost()) {
 			set_best_cost(best_cost);
 			set_time_to_best(current);
 		}
 
-		print_complete_data_out_file(best_cost, current);
+		print_complete_data_out_file(best_cost, best_cost, current);
 
 		delete_all_iterative_structure(I);
 
@@ -141,7 +156,7 @@ void GLGRASP::construction(HDAG &I, HDAG &S) {
 
 	initialize_all_iteration_structure(I);
 
-	set_start_iteration(chrono::system_clock::now());
+	set_start_iteration(chrono::steady_clock::now());
 
 	MTRand rng(getseed());
 
@@ -157,8 +172,9 @@ void GLGRASP::construction(HDAG &I, HDAG &S) {
 
 	while (getTotalToAssign() > 0) {
 
-		// Step 5: escolhe aleatoriamente um vertice da RCL.
-		pair<unsigned, unsigned> p = extract_from_RCL(rng);
+		// Step 5: escolhe aleatoriamente um vertice da RCL, com probabilidade
+		// uniforme sobre a RCL inteira.
+		pair<unsigned, unsigned> p = extract_from_RCL_uniform(rng);
 
 		// Step 5 (a)-(c): monta as posicoes candidatas e sorteia uma.
 		unsigned new_pos = choose_position(I, S, p.first, p.second, rng);
@@ -271,6 +287,20 @@ void GLGRASP::update_G_after_insertion(HDAG &I, HDAG &S, unsigned l, unsigned i)
 
 }
 
+double GLGRASP::effective_G(unsigned l, unsigned i) const {
+
+	double g = G[l][i];
+
+	// Semantica do codigo de referencia: o vertice sem vizinho posicionado
+	// recebe a maior distancia do grafo, valor que PARTICIPA do max G da
+	// Eq. (12) e portanto infla xi.
+	if (g >= GL_INF && unanchored_rule == UNANCHORED_MAXDIS)
+		return D.max_distance();
+
+	return g;
+
+}
+
 void GLGRASP::rebuild_RCL(HDAG &I, HDAG &S) {
 
 	auto &RCL = getRCL();
@@ -287,10 +317,13 @@ void GLGRASP::rebuild_RCL(HDAG &I, HDAG &S) {
 
 	for (unsigned l = 0; l < G.size(); ++l) {
 		for (unsigned i = 0; i < G[l].size(); ++i) {
-			if (CL[l][i] == 1 && G[l][i] < GL_INF) {
-				has_finite = true;
-				if (G[l][i] < g_min) g_min = G[l][i];
-				if (G[l][i] > g_max) g_max = G[l][i];
+			if (CL[l][i] == 1) {
+				double g = effective_G(l, i);
+				if (g < GL_INF) {
+					has_finite = true;
+					if (g < g_min) g_min = g;
+					if (g > g_max) g_max = g;
+				}
 			}
 		}
 	}
@@ -309,12 +342,17 @@ void GLGRASP::rebuild_RCL(HDAG &I, HDAG &S) {
 	// Eq. (12): xi = min G + phi (max G - min G).
 	double xi = g_min + getalpha() * (g_max - g_min);
 
-	// Vertices com G indefinido ficam de fora enquanto existir candidato com
-	// distancia finita: eles sao os ultimos a serem posicionados.
+	// Com UNANCHORED_INF, vertices com G indefinido ficam de fora enquanto
+	// existir candidato com distancia finita: eles sao os ultimos a serem
+	// posicionados. Com UNANCHORED_MAXDIS eles valem max_dis = g_max e so
+	// entram se phi == 1, como no codigo de referencia.
 	for (unsigned l = 0; l < G.size(); ++l)
 		for (unsigned i = 0; i < G[l].size(); ++i)
-			if (CL[l][i] == 1 && G[l][i] < GL_INF && G[l][i] <= xi)
-				add_in_RCL(l, i);
+			if (CL[l][i] == 1) {
+				double g = effective_G(l, i);
+				if (g < GL_INF && g <= xi)
+					add_in_RCL(l, i);
+			}
 
 	// Rede de seguranca: xi >= g_min garante ao menos um candidato, mas uma
 	// eventual imprecisao de ponto flutuante nao pode deixar a RCL vazia
@@ -322,13 +360,139 @@ void GLGRASP::rebuild_RCL(HDAG &I, HDAG &S) {
 	if (getTotalInRCL() == 0) {
 		for (unsigned l = 0; l < G.size(); ++l)
 			for (unsigned i = 0; i < G[l].size(); ++i)
-				if (CL[l][i] == 1 && G[l][i] == g_min) {
+				if (CL[l][i] == 1 && effective_G(l, i) == g_min) {
 					add_in_RCL(l, i);
 					return;
 				}
 	}
 
 	return;
+
+}
+
+pair<unsigned, unsigned> gl_rcl_pick_uniform(
+		vector<vector<pair<unsigned, unsigned> > > &RCL,
+		unsigned total, MTRand &rng) {
+
+	// rebuild_RCL garante RCL nao vazia; a guarda existe so para nao haver
+	// leitura fora de faixa se essa invariante for quebrada no futuro.
+	if (total == 0)
+		return make_pair(0u, 0u);
+
+	unsigned r = rng.randInt(total - 1);
+
+	for (unsigned l = 0; l < RCL.size(); ++l) {
+
+		if (r < RCL[l].size()) {
+
+			pair<unsigned, unsigned> tmp = RCL[l][r];
+			RCL[l].erase(RCL[l].begin() + r);
+
+			return tmp;
+
+		}
+
+		r -= RCL[l].size();
+
+	}
+
+	// Inalcancavel enquanto total == soma dos tamanhos.
+	return make_pair(0u, 0u);
+
+}
+
+pair<unsigned, unsigned> GLGRASP::extract_from_RCL_uniform(MTRand &rng) {
+
+	pair<unsigned, unsigned> tmp =
+			gl_rcl_pick_uniform(getRCL(), getTotalInRCL(), rng);
+
+	if (getTotalInRCL() > 0)
+		getTotalInRCL()--;
+
+	return tmp;
+
+}
+
+unsigned GLGRASP::feasible_position(HDAG &I, HDAG &S, unsigned l, unsigned i,
+		unsigned target) {
+
+	if (feasible_search == SEARCH_REFERENCE)
+		return reference_feasible_position(I, S, l, i, target);
+
+	return closest_feasible_position(I, S, l, i, target);
+
+}
+
+bool GLGRASP::can_shift_up(HDAG &I, HDAG &S, unsigned l, unsigned pos) {
+
+	auto k = getk();
+
+	auto &Pos = I.getPos();
+	auto &IDs_S = S.getIDs();
+	auto &Os_S = S.getOs();
+
+	if (pos == 0)
+		return false;
+
+	// Vertice incremental nao tem restricao de deslocamento.
+	if (!Os_S[l][pos - 1])
+		return true;
+
+	// Original: Claim 2, |pi_0(v) - pi(v)| <= k, nos dois limites.
+	unsigned id_ = IDs_S[l][pos - 1];
+	unsigned origin_pos = Pos[l][id_];
+
+	if (pos > origin_pos + k)
+		return false;
+
+	if (origin_pos > k && pos < origin_pos - k)
+		return false;
+
+	return true;
+
+}
+
+unsigned GLGRASP::reference_feasible_position(HDAG &I, HDAG &S, unsigned l,
+		unsigned i, unsigned target) {
+
+	auto &LEVELS_S = S.getLEVELS();
+
+	unsigned n = LEVELS_S[l].size();
+
+	// ind do g_vq: primeiro slot livre do nivel.
+	unsigned first_free = n;
+	for (unsigned p = 0; p < n; ++p) {
+		if (is_position_free(S, l, p)) {
+			first_free = p;
+			break;
+		}
+	}
+
+	// A construcao so chama isto enquanto ha vertice a posicionar, logo
+	// sempre existe slot livre; a guarda evita indice invalido se a
+	// invariante for quebrada no futuro.
+	if (first_free == n)
+		return target < n ? target : n - 1;
+
+	// "if q3 >= ind: pos_final = ind" -- alvo no slot livre ou alem dele.
+	if (target >= first_free)
+		return first_free;
+
+	// Caminha do slot livre PARA BAIXO em direcao ao alvo, perguntando a cada
+	// passo se o vertice que esta em p-1 pode subir para p. Para no primeiro
+	// passo bloqueado.
+	unsigned con = 0;
+	for (unsigned p = first_free; p > target; --p) {
+		if (!can_shift_up(I, S, l, p))
+			break;
+		++con;
+	}
+
+	// "if con == ind - q3: pos_final = q3  else: pos_final = ind - con"
+	if (con == first_free - target)
+		return target;
+
+	return first_free - con;
 
 }
 
@@ -368,6 +532,22 @@ unsigned GLGRASP::closest_feasible_position(HDAG &I, HDAG &S, unsigned l,
 
 }
 
+unsigned GLGRASP::position_without_anchor(HDAG &I, HDAG &S, unsigned l,
+		unsigned i, MTRand &rng) {
+
+	// Codigo de referencia: random.randint(0, n - 1).
+	if (unanchored_rule == UNANCHORED_MAXDIS) {
+		unsigned n = S.getLEVELS()[l].size();
+		unsigned target = rng.randInt(n - 1);
+		return feasible_position(I, S, l, i, target);
+	}
+
+	// Nossa semantica: mantem o vertice o mais perto possivel da posicao que
+	// ele ocupa na instancia.
+	return feasible_position(I, S, l, i, i);
+
+}
+
 unsigned GLGRASP::choose_position(HDAG &I, HDAG &S, unsigned l, unsigned i,
 		MTRand &rng) {
 
@@ -378,11 +558,16 @@ unsigned GLGRASP::choose_position(HDAG &I, HDAG &S, unsigned l, unsigned i,
 
 	unsigned id_u = IDs[l][i];
 
+	// Alvo escolhido em cada nivel vizinho (l+1 e l-1), antes de qualquer
+	// ajuste de viabilidade.
+	vector<unsigned> side_target;
+
+	// Candidatas ja ajustadas para viabilidade (so a leitura POS_RULE_TEXT).
 	vector<unsigned> P;
 
-	// Step 5 (a): para cada nivel vizinho que tenha algum vizinho de u ja
-	// posicionado, sorteia entre a posicao do vizinho MAIS PROXIMO e a do
-	// MAIS DISTANTE (em distancia de embedding).
+	// Step 5 (a): em cada nivel vizinho que tenha algum vizinho de u ja
+	// posicionado, localiza o vizinho MAIS PROXIMO e o MAIS DISTANTE (em
+	// distancia de embedding) e define o alvo daquele lado.
 	for (int side = 0; side < 2; ++side) {
 
 		unsigned lv;
@@ -425,28 +610,55 @@ unsigned GLGRASP::choose_position(HDAG &I, HDAG &S, unsigned l, unsigned i,
 		if (!found)
 			continue;
 
-		unsigned chosen_id = (rng.randInt(1) == 0) ? id_min : id_max;
+		unsigned pos_min = Pos_S[lv][id_min];
+		unsigned pos_max = Pos_S[lv][id_max];
 
-		// A posicao do vizinho escolhido, no nivel vizinho, e o alvo; a
-		// candidata e a posicao viavel mais proxima dele no nivel l.
-		P.push_back(closest_feasible_position(I, S, l, i, Pos_S[lv][chosen_id]));
+		if (position_rule == POS_RULE_FIGURE) {
+
+			// Figura 3 / func_ale: uniforme entre a posicao do vizinho mais
+			// proximo, a do mais distante e o ponto medio das duas. O ponto
+			// medio DENTRO de um mesmo nivel so existe nesta leitura.
+			side_target.push_back(gl_func_ale(pos_min, pos_max, rng));
+
+		} else {
+
+			// Texto do Step 5: sorteia entre mais proximo e mais distante, e
+			// ja converte para a posicao viavel mais proxima no nivel l.
+			unsigned chosen = (rng.randInt(1) == 0) ? pos_min : pos_max;
+			P.push_back(feasible_position(I, S, l, i, chosen));
+
+		}
+
+	}
+
+	if (position_rule == POS_RULE_FIGURE) {
+
+		if (side_target.size() == 0)
+			return position_without_anchor(I, S, l, i, rng);
+
+		// Entre niveis, func_ale de novo; com um unico nivel vizinho o alvo
+		// daquele lado e usado diretamente.
+		unsigned target = (side_target.size() == 2)
+				? gl_func_ale(side_target[0], side_target[1], rng)
+				: side_target[0];
+
+		// O ajuste de viabilidade e aplicado UMA vez, sobre o alvo final.
+		return feasible_position(I, S, l, i, target);
 
 	}
 
 	// Step 5 (b): acrescenta a posicao viavel mais proxima da media das que
 	// ja estao em P.
 	if (P.size() > 0) {
-		unsigned long sum = 0;
+		unsigned long long sum = 0;
 		for (unsigned j = 0; j < P.size(); ++j)
 			sum += P[j];
 		unsigned avg = (unsigned) (sum / P.size());
-		P.push_back(closest_feasible_position(I, S, l, i, avg));
+		P.push_back(feasible_position(I, S, l, i, avg));
 	}
 
-	// Nenhum vizinho posicionado (G(u) indefinido): mantem o vertice o mais
-	// perto possivel da posicao que ele ocupa na instancia.
 	if (P.size() == 0)
-		return closest_feasible_position(I, S, l, i, i);
+		return position_without_anchor(I, S, l, i, rng);
 
 	// Step 5 (c): escolhe uma das candidatas ao acaso.
 	return P[rng.randInt(P.size() - 1)];
@@ -633,6 +845,13 @@ unsigned GLGRASP::check_violation(HDAG &I, HDAG &S, unsigned l, unsigned i,
 			unsigned max_feasibile_pos = origin_pos + k;
 
 			if (potential_new_pos > max_feasibile_pos)
+				return 1;
+
+			// Claim 2 e |pi_0(v) - pi(v)| <= k, ou seja, tem DOIS limites. O
+			// deslocamento aqui e sempre para cima, logo este teste nunca
+			// deveria falhar; e a mesma verificacao defensiva que o
+			// check_position do codigo de referencia faz.
+			if (origin_pos > k && potential_new_pos < origin_pos - k)
 				return 1;
 
 		}

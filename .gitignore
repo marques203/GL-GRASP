@@ -1,6 +1,16 @@
 # Build artifacts
 *.o
 *.exe
+# listas de dependencia de headers geradas pelo compilador (-MMD)
+*.d
+
+# Logs de execucao dos experimentos
+*.log
+
+# Saidas avulsas de execucoes manuais e temporarios dos testes
+gl_best.txt
+gl_completo.txt
+tests/_t/
 
 # Generated test-run outputs (regenerate with ./test_battery.sh)
 results/

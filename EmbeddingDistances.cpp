@@ -25,6 +25,7 @@ bool EmbeddingDistances::load(const string &filename, HDAG &I) {
 
 	FWD.clear();
 	BWD.clear();
+	max_dis = 0.0;
 	FWD.resize(ln);
 	BWD.resize(ln);
 	for (unsigned l = 0; l < ln; ++l) {
@@ -86,6 +87,9 @@ bool EmbeddingDistances::load(const string &filename, HDAG &I) {
 
 		FWD[lu][iu].push_back(make_pair(iv, d));
 		BWD[lv][iv].push_back(make_pair(iu, d));
+
+		if (d > max_dis)
+			max_dis = d;
 
 		read++;
 

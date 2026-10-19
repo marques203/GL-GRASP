@@ -43,6 +43,20 @@ public:
 
 	void setk(unsigned x) {k = x;};
 	void setalpha(double x) {alpha = x;};
+
+	// Numero maximo de iteracoes SEM MELHORA antes de parar (eta_max do
+	// artigo de Charytitsch e Nascimento, 2026; vale 20 nos experimentos
+	// deles, aplicado tanto ao GL-GRASP quanto ao GRASP2/GRASP3).
+	void set_eta_max(unsigned x) {eta_max = x;};
+	unsigned get_eta_max() const {return eta_max;};
+
+	// Semente do gerador aleatorio usado no laco principal (sorteio do phi).
+	// Fixa-la torna a execucao reproduzivel e permite usar numeros aleatorios
+	// comuns entre algoritmos na mesma repeticao, o que reduz a variancia da
+	// comparacao.
+	void set_rng_seed(unsigned x) {rng_seed = x;};
+	unsigned get_rng_seed() const {return rng_seed;};
+
 	void setseed(unsigned x) {seed = x;};
 	void setmaxIter(unsigned x) {max_iter = x;};
 	void setTimeLimit(double t) {time_limit = t;};
@@ -167,28 +181,40 @@ public:
 	void set_best_cost(double x) {best_cost = x;}
 	void set_time_to_best(double x) {time_to_best = x;}
 
-	chrono::time_point<chrono::system_clock> &get_start_iteration() {return start_iteration;}
-	chrono::time_point<chrono::system_clock> &get_end_iteration() {return end_iteration;}
-	chrono::time_point<chrono::system_clock> &get_start_algorithm() {return start_algorithm;}
+	chrono::time_point<chrono::steady_clock> &get_start_iteration() {return start_iteration;}
+	chrono::time_point<chrono::steady_clock> &get_end_iteration() {return end_iteration;}
+	chrono::time_point<chrono::steady_clock> &get_start_algorithm() {return start_algorithm;}
 	double get_total_time_algorithm() {
-		int elapsed =
-				chrono::duration_cast<chrono::milliseconds>(end_iteration - start_algorithm).count();
-		return (double)((double)elapsed / (double)1000);
+		long long elapsed =
+				chrono::duration_cast<chrono::microseconds>(end_iteration - start_algorithm).count();
+		return (double)((double)elapsed / (double)1000000);
 	}
 
-	void set_start_iteration(chrono::time_point<chrono::system_clock> x) {start_iteration = x;}
-	void set_end_iteration(chrono::time_point<chrono::system_clock> x) {end_iteration = x;}
-	void set_start_algorithm(chrono::time_point<chrono::system_clock> x) {start_algorithm = x;}
+	void set_start_iteration(chrono::time_point<chrono::steady_clock> x) {start_iteration = x;}
+	void set_end_iteration(chrono::time_point<chrono::steady_clock> x) {end_iteration = x;}
+	void set_start_algorithm(chrono::time_point<chrono::steady_clock> x) {start_algorithm = x;}
 
 	void set_best_out_file(char *filename) { out_f_best = fopen(filename, "a"); };
 	void set_complete_out_file(char *filename) { out_f_complete = fopen(filename, "a"); };
     void print_best_data_out_file() {
-    	fprintf(out_f_best, "%d %0.2f %0.3f %0.3f %0.3f\n",
+    	fprintf(out_f_best, "%d %0.2f %0.3f %0.6f %0.6f\n",
     			k, alpha, best_cost, get_total_time_algorithm(), time_to_best);
     }
-    void print_complete_data_out_file(double actual_z, double current_t) {
-    	fprintf(out_f_complete, "%0.2f %d %0.3f %0.3f\n",
-    			alpha, seed, actual_z, current_t);
+    // Uma linha por iteracao do GRASP:
+    //     phi  semente  custo_construcao  custo_busca_local  tempo_acumulado
+    // custo_construcao e o custo da solucao que ENTRA na busca local; sem
+    // busca local as duas colunas de custo sao iguais.
+    void print_complete_data_out_file(double constr_z, double actual_z, double current_t) {
+    	if (constr_z < best_constr_cost)
+    		best_constr_cost = constr_z;
+    	fprintf(out_f_complete, "%0.2f %d %0.3f %0.3f %0.6f\n",
+    			alpha, seed, constr_z, actual_z, current_t);
+    }
+    // Linha final de resumo, no mesmo formato de 5 colunas: melhor custo de
+    // construcao e melhor custo final da execucao, e o tempo total.
+    void print_summary_complete_out_file(double best_z, double current_t) {
+    	fprintf(out_f_complete, "%0.2f %d %0.3f %0.3f %0.6f\n",
+    			alpha, seed, best_constr_cost, best_z, current_t);
     }
 	void close_out_file() { fclose(out_f_best); fclose(out_f_complete); };
 
@@ -226,6 +252,16 @@ private:
 
 	// maximum iterations value
 	unsigned max_iter;
+
+	// maximum number of iterations without improvement (eta_max)
+	unsigned eta_max;
+
+	// seed of the main-loop random number generator
+	unsigned rng_seed;
+
+	// menor custo de construcao (antes da busca local) visto na execucao,
+	// para a linha de resumo do arquivo completo
+	double best_constr_cost;
 
 	// tenure for the TABU search based on the
 	// vertex selection
@@ -322,9 +358,9 @@ private:
 	Elite_Set *ES;
 	Path_Relinking *PR;
 
-	chrono::time_point<chrono::system_clock> start_algorithm;
-	chrono::time_point<chrono::system_clock> start_iteration;
-	chrono::time_point<chrono::system_clock> end_iteration;
+	chrono::time_point<chrono::steady_clock> start_algorithm;
+	chrono::time_point<chrono::steady_clock> start_iteration;
+	chrono::time_point<chrono::steady_clock> end_iteration;
 
 };
 

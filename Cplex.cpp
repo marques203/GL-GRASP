@@ -36,9 +36,9 @@ void Cplex::cplex(HDAG &G, int argc, char *argv[]) {
 	char *outfile = argv[5];
 	FILE *out_f;
 	out_f = fopen(outfile, "a");
-	auto start_chrono = chrono::system_clock::now();
+	auto start_chrono = chrono::steady_clock::now();
 	solve_model(G);
-	auto end_chrono = chrono::system_clock::now();
+	auto end_chrono = chrono::steady_clock::now();
 	auto elapsed = chrono::duration_cast<chrono::milliseconds>(end_chrono - start_chrono);
 	set_runtime((double)((double)elapsed.count() / (double)1000));
 	if (optimal_solution_found()) {

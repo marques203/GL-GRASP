@@ -18,7 +18,7 @@ GRASP_v1::GRASP_v1(HDAG &I, char *argv[]) {
 	setTotalInRCL(0);
 	setTotalToAssign(0);
 	set_best_cost(INT64_MAX);
-	set_start_algorithm(chrono::system_clock::now());
+	set_start_algorithm(chrono::steady_clock::now());
 	allocate_and_build_all_structure(I);
 	compute_degree_matrix(I);
 
@@ -52,10 +52,10 @@ void GRASP_v1::algorithm(HDAG &I, int argc, char *argv[]) {
 			run(I, *S);
 			S = nullptr;
 		}
-		int elapsed = chrono::duration_cast<chrono::milliseconds>(
+		long long elapsed = chrono::duration_cast<chrono::microseconds>(
 				get_end_iteration() - get_start_algorithm()).count();
-		double current = (double) ((double) elapsed / (double) 1000);
-		print_complete_data_out_file(get_best_cost(), current);
+		double current = (double) ((double) elapsed / (double) 1000000);
+		print_summary_complete_out_file(get_best_cost(), current);
 		print_best_data_out_file();
 		close_out_file();
 
@@ -85,14 +85,14 @@ void GRASP_v1::algorithm(HDAG &I, int argc, char *argv[]) {
 	PR = new Path_Relinking(argv[11]);
 	PR->Relink(*ES, get_best_solution(), I);
 	set_best_cost(get_best_solution().get_cost());
-	set_end_iteration(chrono::system_clock::now());
-	int elapsed = chrono::duration_cast<chrono::milliseconds>(
+	set_end_iteration(chrono::steady_clock::now());
+	long long elapsed = chrono::duration_cast<chrono::microseconds>(
 			get_end_iteration() - get_start_algorithm()).count();
-	double current = (double) ((double) elapsed / (double) 1000);
+	double current = (double) ((double) elapsed / (double) 1000000);
 	if (old_best > get_best_cost()) {
 		set_time_to_best(current);
 	}
-	print_complete_data_out_file(get_best_cost(), current);
+	print_summary_complete_out_file(get_best_cost(), current);
 	print_best_data_out_file();
 	close_out_file();
 
@@ -118,12 +118,12 @@ void GRASP_v1::run(HDAG &I, HDAG &S) {
 
 		S.set_cost(best_cost);
 
-		set_end_iteration(chrono::system_clock::now());
+		set_end_iteration(chrono::steady_clock::now());
 
-		int elapsed =
-				chrono::duration_cast<chrono::milliseconds>(get_end_iteration() -
+		long long elapsed =
+				chrono::duration_cast<chrono::microseconds>(get_end_iteration() -
 						get_start_algorithm()).count();
-		double current = (double)((double)elapsed / (double)1000);
+		double current = (double)((double)elapsed / (double)1000000);
 
 		if (best_cost < get_best_cost()) {
 
@@ -132,7 +132,7 @@ void GRASP_v1::run(HDAG &I, HDAG &S) {
 
 		}
 
-		print_complete_data_out_file(best_cost, current);
+		print_complete_data_out_file(best_cost, best_cost, current);
 
 		delete_all_iterative_structure(I);
 
@@ -147,7 +147,7 @@ void GRASP_v1::construction(HDAG &I, HDAG &S) {
 
 	initialize_all_iteration_structure(I);
 
-	set_start_iteration(chrono::system_clock::now());
+	set_start_iteration(chrono::steady_clock::now());
 
 	allocate_solution(I, S);
 

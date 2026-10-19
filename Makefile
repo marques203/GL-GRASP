@@ -35,7 +35,19 @@ endif
 
 OBJS := $(SRCS:.cpp=.o)
 
-.PHONY: all clean run
+# Dependencia dos headers. -MMD faz o compilador escrever, ao lado de cada
+# .o, um .d com a lista de headers do projeto que aquele .cpp inclui; -MP
+# evita erro se um header for apagado. Sem isso, editar um .h (por exemplo
+# acrescentar um membro em GRASP.h) recompilava so os .cpp editados, e o
+# binario misturava duas versoes da mesma classe -- ja causou segfault.
+DEPS := $(OBJS:.o=.d)
+
+TEST_TARGET := tests/test_glgrasp_units.exe
+
+# objetos de biblioteca (tudo menos o main) para linkar com os testes
+LIB_OBJS := $(filter-out main.o,$(OBJS))
+
+.PHONY: all clean run test
 
 all: $(TARGET)
 
@@ -43,10 +55,19 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+-include $(DEPS)
 
 run: $(TARGET)
 	./$(TARGET) $(ARGS)
 
+# Testes de unidade das pecas novas do GL-GRASP (itens 1.1 e 1.2).
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
+
+$(TEST_TARGET): tests/test_glgrasp_units.cpp $(LIB_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ tests/test_glgrasp_units.cpp $(LIB_OBJS) $(LDFLAGS)
+
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(DEPS) $(TARGET) $(TEST_TARGET)

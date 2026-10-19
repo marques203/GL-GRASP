@@ -10,7 +10,9 @@
 
 GRASP::GRASP() :
 		k(0), rhomax(0), maxdeg(0), /*minimum_deg_partial(0), maximum_deg_partial(
-				0), tau(0),*/ alpha(0), seed(0), max_iter(100), tenure_vertex_position(1),
+				0), tau(0),*/ alpha(0), seed(0), max_iter(100),
+				eta_max(4294967295u), rng_seed(1), best_constr_cost(1e300),
+				tenure_vertex_position(1),
 				ls(), total_in_RCL(0), total_to_assign(
 				0), out_f_best(NULL), out_f_complete(NULL), best_cost(
 				INT64_MAX), time_to_best(0), ES(nullptr), PR(nullptr) {
@@ -30,6 +32,10 @@ void GRASP::localsearch(HDAG &I, HDAG &S) {
 	double best_cost = s.getCost(S);
 	S.set_cost(best_cost);
 
+	// Custo da solucao que entra na busca local, ou seja, o resultado da fase
+	// construtiva. move() sobrescreve best_cost, entao guardamos antes.
+	double constr_cost = best_cost;
+
 	// try to push up an incremental node until the solution improves;
 	// otherwise try to push it down until the solution improves, but
 	// this second step must guarantee the feasibility position constraint of the original node
@@ -37,12 +43,12 @@ void GRASP::localsearch(HDAG &I, HDAG &S) {
 
 	S.set_cost(best_cost);
 
-	set_end_iteration(chrono::system_clock::now());
+	set_end_iteration(chrono::steady_clock::now());
 
-	int elapsed =
-			chrono::duration_cast<chrono::milliseconds>(end_iteration -
+	long long elapsed =
+			chrono::duration_cast<chrono::microseconds>(end_iteration -
 					start_algorithm).count();
-	double current = (double)((double)elapsed / (double)1000);
+	double current = (double)((double)elapsed / (double)1000000);
 
 	if (best_cost < get_best_cost()) {
 
@@ -55,10 +61,7 @@ void GRASP::localsearch(HDAG &I, HDAG &S) {
 
 	}
 
-//	fprintf(out_f_best, "%d %d\n", (int)constr_cost, (int)best_cost);
-//	fprintf(out_f_complete, "%d %d\n", (int)constr_cost, (int)best_cost);
-
-	print_complete_data_out_file(best_cost, current);
+	print_complete_data_out_file(constr_cost, best_cost, current);
 
 	delete_all_iterative_structure(I);
 
@@ -1711,6 +1714,9 @@ void GRASP::localsearch_TABU(HDAG &I, HDAG &S, unsigned iter) {
 	double actual_best_cost = s.getCost(S);
 	S.set_cost(actual_best_cost);
 
+	// custo da solucao que entra na busca local (resultado da construcao)
+	double constr_cost = actual_best_cost;
+
 	// try to push up an incremental node until the solution improves;
 	// otherwise try to push it down until the solution improves, but
 	// this second step must guarantee the feasibility position constraint of the original node
@@ -1718,12 +1724,12 @@ void GRASP::localsearch_TABU(HDAG &I, HDAG &S, unsigned iter) {
 
 	S.set_cost(actual_best_cost);
 
-	set_end_iteration(chrono::system_clock::now());
+	set_end_iteration(chrono::steady_clock::now());
 
-	int elapsed =
-			chrono::duration_cast<chrono::milliseconds>(end_iteration -
+	long long elapsed =
+			chrono::duration_cast<chrono::microseconds>(end_iteration -
 					start_algorithm).count();
-	double current = (double)((double)elapsed / (double)1000);
+	double current = (double)((double)elapsed / (double)1000000);
 
 	if (actual_best_cost < get_best_cost()) {
 
@@ -1733,7 +1739,7 @@ void GRASP::localsearch_TABU(HDAG &I, HDAG &S, unsigned iter) {
 
 	}
 
-	print_complete_data_out_file(actual_best_cost, current);
+	print_complete_data_out_file(constr_cost, actual_best_cost, current);
 
 	delete_all_iterative_structure(I);
 

@@ -157,15 +157,85 @@ bool correct_grasp_parameter(int argc, char *argv[]) {
 
 }
 
+bool correct_grasp2_parameter(int argc, char *argv[]) {
+
+	// Igual ao grasp, mas aceita dois parametros opcionais antes do bloco de
+	// path relinking:
+	// - [11]: eta_max, iteracoes sem melhora (default: sem limite)
+	// - [12]: semente do gerador aleatorio (default: 1)
+	// O bloco de path relinking continua exigindo [11], [12] e [13], ou seja
+	// argc >= 14 (a execucao simples e usada quando argc < 14).
+	int k = atoi(argv[3]);
+	if (k < 0) {
+		cerr << " k-value (arg[3]) must be an integer positive value" << endl;
+		exit(0);
+	}
+	double alpha = atof(argv[4]);
+	if (alpha < 0 || alpha > 1) {
+		cerr << " apha-value (arg[4]) must be a real nonnegative value in the range [0,1]" << endl;
+		exit(0);
+	}
+	char *ls = argv[5];
+	if (strcmp(ls, "first") != 0 && strcmp(ls, "best") != 0 &&
+		strcmp(ls, "no") != 0 && strcmp(ls, "first-prepro") != 0) {
+		cerr << " Selected local-search (arg[5]) incorrect!" << endl;
+		cerr << " - Possible choices {first, first-prepro, best, no}" << endl;
+		exit(0);
+	}
+	int maxit = atoi(argv[6]);
+	if (maxit < 1 || maxit > 1000000) {
+		cerr << " max-it (arg[6]) must be an integer positive value in the range [10, 1000000]" << endl;
+		exit(0);
+	}
+	int tl = atoi(argv[10]);
+	if (tl < 10 || tl > 3600) {
+		cerr << " time-limit (arg[10]) must be an integer positive value in the range [10, 3600]" << endl;
+		exit(0);
+	}
+	if (argc == 12 || argc == 13) {
+		if (atoi(argv[11]) < 1) {
+			cerr << " eta_max (arg[11]) must be an integer positive value" << endl;
+			exit(0);
+		}
+	}
+	if (argc >= 14) {
+		char *t_PR = argv[11];
+		int dim_ES = atoi(argv[12]);
+		double th = atof(argv[13]);
+		if (strcmp(t_PR, "f") != 0 && strcmp(t_PR, "F") != 0 &&
+			strcmp(t_PR, "b") != 0 && strcmp(t_PR, "B") != 0 &&
+			strcmp(t_PR, "m") != 0 && strcmp(t_PR, "M") != 0 ) {
+			cerr << " - [11]: type of path relinking must be a char in {f(or F), b(or B), m(or M)}" << endl;
+			exit(0);
+		}
+		if (dim_ES < 5 || dim_ES > 20) {
+			cerr << " - [12]: dimension of the elite set, an integer positive value in the range [5, 20]" << endl;
+			exit(0);
+		}
+		if (th < 0 || th > 1) {
+			cerr << " - [13]: threshold for access to the elite set, a real value in the range [0, 1]" << endl;
+			exit(0);
+		}
+	}
+
+	return true;
+
+}
+
 bool correct_glgrasp_parameter(int argc, char *argv[]) {
 
 	// Parametros [3] a [10] sao os mesmos do grasp; alem deles:
 	// - [11]: arquivo com as distancias de embedding (obrigatorio)
 	// - [12]: eta_max, numero maximo de iteracoes sem melhora (opcional)
+	// - [13]: semente do gerador aleatorio (opcional)
+	// - [14]: leitura do Step 5, {figure, text} (opcional, default figure)
+	// - [15]: G indefinido, {maxdis, inf} (opcional, default maxdis)
+	// - [16]: busca de posicao viavel, {reference, spiral} (default reference)
 	if (argc < 12) {
 		cerr << " glgrasp requer o arquivo de distancias no parametro [11]" << endl;
 		cerr << " uso: <instancia> glgrasp <k> <alpha> <busca_local> <max_it> <nome>"
-				" <saida_best> <saida_completa> <tempo_limite> <arquivo_distancias> [eta_max]" << endl;
+				" <saida_best> <saida_completa> <tempo_limite> <arquivo_distancias>"
+				" [eta_max] [semente] [figure|text] [maxdis|inf] [reference|spiral]" << endl;
 		exit(0);
 	}
 	// - check the parameter [3], the k value
@@ -205,6 +275,33 @@ bool correct_glgrasp_parameter(int argc, char *argv[]) {
 		int eta_max = atoi(argv[12]);
 		if (eta_max < 1) {
 			cerr << " eta_max (arg[12]) must be an integer positive value" << endl;
+			exit(0);
+		}
+	}
+	// - check the parameter [14], Step 5 reading (optional)
+	if (argc > 14) {
+		char *pr = argv[14];
+		if (strcmp(pr, "figure") != 0 && strcmp(pr, "text") != 0) {
+			cerr << " position-rule (arg[14]) incorrect!" << endl;
+			cerr << " - Possible choices {figure, text}" << endl;
+			exit(0);
+		}
+	}
+	// - check the parameter [15], undefined-G handling (optional)
+	if (argc > 15) {
+		char *ur = argv[15];
+		if (strcmp(ur, "inf") != 0 && strcmp(ur, "maxdis") != 0) {
+			cerr << " unanchored-rule (arg[15]) incorrect!" << endl;
+			cerr << " - Possible choices {maxdis, inf}" << endl;
+			exit(0);
+		}
+	}
+	// - check the parameter [16], feasible-position search (optional)
+	if (argc > 16) {
+		char *fs = argv[16];
+		if (strcmp(fs, "reference") != 0 && strcmp(fs, "spiral") != 0) {
+			cerr << " feasible-search (arg[16]) incorrect!" << endl;
+			cerr << " - Possible choices {reference, spiral}" << endl;
 			exit(0);
 		}
 	}
@@ -316,7 +413,7 @@ unsigned input_manager(char argc, char *argv[]) {
 	case(2):
 	{
 
-		if (correct_grasp_parameter(argc, argv))
+		if (correct_grasp2_parameter(argc, argv))
 			return 2;
 
 	}
